@@ -41,8 +41,8 @@ A powerful, production-ready workflow orchestration platform built with CrewAI, 
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/yourusername/crewai-workflow.git
-cd crewai-workflow
+git clone https://github.com/pranavrajput12/Precall-report.git
+cd Precall-report
 ```
 
 ### 2. Backend Setup
@@ -253,8 +253,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 📞 Support
 
 - Documentation: [docs/](docs/)
-- Issues: [GitHub Issues](https://github.com/yourusername/crewai-workflow/issues)
-- Discussions: [GitHub Discussions](https://github.com/yourusername/crewai-workflow/discussions)
+- Issues: [GitHub Issues](https://github.com/pranavrajput12/Precall-report/issues)
+- Discussions: [GitHub Discussions](https://github.com/pranavrajput12/Precall-report/discussions)
 
 ---
 
