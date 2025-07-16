@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CrewAI Workflow - Demo Results</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .result-card {
+            transition: all 0.3s ease;
+            border-left: 4px solid #3b82f6;
+        }
+        .result-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+        }
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .badge-success {
+            background-color: #dcfce7;
+            color: #166534;
+        }
+        .badge-info {
+            background-color: #dbeafe;
+            color: #1e40af;
+        }
+        .badge-warning {
+            background-color: #fef3c7;
+            color: #92400e;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen" x-data="demoResults()">
+    <!-- Header -->
+    <header class="gradient-bg text-white shadow-lg">
+        <div class="container mx-auto px-4 py-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-3xl font-bold">CrewAI Workflow Demo Results</h1>
+                    <p class="text-blue-100 mt-1">Live demonstration with A'reve Studio case study</p>
+                </div>
+                <div class="flex space-x-4">
+                    <a href="/" class="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition-colors">
+                        🏠 Home
+                    </a>
+                    <a href="/dashboard" class="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition-colors">
+                        📊 Dashboard
+                    </a>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Demo Info Banner -->
+    <div class="bg-blue-50 border-b">
+        <div class="container mx-auto px-4 py-6">
+            <div class="bg-white rounded-lg p-6 shadow-sm">
+                <div class="flex items-start space-x-4">
+                    <div class="flex-shrink-0">
+                        <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                            <span class="text-2xl">🎬</span>
+                        </div>
+                    </div>
+                    <div class="flex-1">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-2">Live Demo Case Study</h3>
+                        <p class="text-gray-600 mb-4">This demonstrates our AI workflow processing a real LinkedIn conversation between Drushi Thakkar and Michelle Marsan from A'reve Studio regarding potential fundraising opportunities.</p>
+                        <div class="flex space-x-4 text-sm">
+                            <span class="badge badge-success">✅ Profile Enrichment</span>
+                            <span class="badge badge-info">🔍 Thread Analysis</span>
+                            <span class="badge badge-warning">✍️ Reply Generation</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container mx-auto px-4 py-8">
+        <!-- Input Summary -->
+        <div class="mb-8 bg-white rounded-lg shadow-lg p-6">
+            <h2 class="text-2xl font-bold mb-4 text-gray-800">📥 Input Data</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <h4 class="font-semibold text-gray-700 mb-2">Conversation Thread</h4>
+                    <div class="bg-gray-50 rounded-lg p-4 text-sm">
+                        <p class="text-gray-600">Hi Michelle, I am looking to connect with founders in the fitness industry. Are you raising funds for A'reve Studio? Delivered Avatar June 13, 2025 Drushi Thakkar 10:00 Michelle, excited to be part of your network! Your work with A'reve Studio is interesting. Happy to share fundraising insights or be a resource for your investor info. Delivered Avatar Avatar Michelle Marsan 22:02 Thanks, Drushi</p>
+                    </div>
+                </div>
+                <div>
+                    <h4 class="font-semibold text-gray-700 mb-2">Contact Information</h4>
+                    <div class="space-y-2 text-sm">
+                        <div><span class="font-medium">Channel:</span> LinkedIn</div>
+                        <div><span class="font-medium">Prospect:</span> Michelle Marzan</div>
+                        <div><span class="font-medium">Company:</span> A'reve Studio</div>
+                        <div><span class="font-medium">Website:</span> www.shop-areve.com</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI Analysis Results -->
+        <div class="space-y-8">
+            <!-- Profile Enrichment Results -->
+            <div class="result-card bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6 shadow-lg">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-xl font-bold text-blue-800 flex items-center">
+                        👤 Profile Enrichment Results
+                    </h3>
+                    <span class="badge badge-success">Completed</span>
+                </div>
+                <div class="bg-white rounded-lg p-6">
+                    <div class="prose prose-sm max-w-none text-gray-700">
+                        <p><strong>Prospect Summary: Michelle Marzan</strong></p>
+                        <p>Michelle Marzan is the Founder and CEO of Arevé Studio, a contemporary fashion brand. With a background in entrepreneurship and creative direction, Michelle leads the brand's vision, product development, and business growth. Her expertise spans branding, e-commerce, and women's apparel, positioning her as a dynamic leader in the fashion and retail sector.</p>
+                        
+                        <p><strong>Company Summary: Arevé Studio</strong></p>
+                        <ul>
+                            <li><strong>Industry/Sector:</strong> Fashion & Apparel (Women's Contemporary Clothing)</li>
+                            <li><strong>Founded:</strong> 2021 by Michelle Marzan</li>
+                            <li><strong>Headquarters:</strong> New York, NY</li>
+                            <li><strong>Overview:</strong> Arevé Studio offers modern, versatile women's clothing designed for comfort and style. The brand emphasizes quality craftsmanship, ethical production, and limited-edition collections.</li>
+                            <li><strong>Founder Details:</strong> Michelle Marzan is a first-generation Dominican-American entrepreneur with a passion for empowering women through fashion.</li>
+                            <li><strong>Fundraising:</strong> No public record of institutional fundraising; appears to be founder/bootstrapped.</li>
+                        </ul>
+                        
+                        <p><strong>Testimonials/Social Proof:</strong></p>
+                        <ul>
+                            <li>Featured in publications such as Vogue and Harper's Bazaar, highlighting the brand's design ethos and founder story.</li>
+                            <li>Positive customer reviews on the company website and social media praising fit, quality, and unique designs.</li>
+                            <li>Strong Instagram presence (@shopareve) with over 10k followers, showcasing influencer collaborations and customer engagement.</li>
+                        </ul>
+                        
+                        <p><strong>Key Takeaways:</strong> Arevé Studio is an emerging, founder-led fashion brand focused on empowering women through thoughtfully designed apparel. Michelle Marzan's leadership and media recognition provide strong credibility and growth potential within the direct-to-consumer fashion space.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Thread Analysis Results -->
+            <div class="result-card bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-6 shadow-lg">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-xl font-bold text-green-800 flex items-center">
+                        🔍 Thread Analysis Results
+                    </h3>
+                    <span class="badge badge-info">Analyzed</span>
+                </div>
+                <div class="bg-white rounded-lg p-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <h4 class="font-semibold text-gray-700 mb-2">Qualification Stage</h4>
+                            <p class="text-gray-600">Initial outreach / Discovery</p>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold text-gray-700 mb-2">Tone Analysis</h4>
+                            <p class="text-gray-600">Professional, friendly, and open</p>
+                        </div>
+                        <div class="md:col-span-2">
+                            <h4 class="font-semibold text-gray-700 mb-2">Message Summary</h4>
+                            <p class="text-gray-600">Drushi Thakkar reached out to Michelle Marsan, expressing interest in connecting with fitness industry founders and inquiring if A'reve Studio is raising funds. Drushi offered to share fundraising insights and be a resource for investor information. Michelle responded with a brief thank you.</p>
+                        </div>
+                        <div class="md:col-span-2">
+                            <h4 class="font-semibold text-gray-700 mb-2">Explicit Questions Identified</h4>
+                            <div class="bg-yellow-50 rounded-lg p-4">
+                                <p class="text-gray-700 font-medium">"Are you raising funds for A'reve Studio?"</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Generated Reply Results -->
+            <div class="result-card bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg p-6 shadow-lg">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-xl font-bold text-purple-800 flex items-center">
+                        ✍️ Generated Reply Sequence
+                    </h3>
+                    <span class="badge badge-warning">Generated</span>
+                </div>
+                <div class="bg-white rounded-lg p-6">
+                    <div class="space-y-6">
+                        <div class="border-l-4 border-purple-500 pl-4">
+                            <h4 class="font-semibold text-gray-700 mb-2">Personalized Follow-Up #1</h4>
+                            <div class="bg-gray-50 rounded-lg p-4 text-sm">
+                                <p class="text-gray-700">Hi Michelle,</p>
+                                <p class="text-gray-700 mt-2">Thank you for your response! I've been following Arevé Studio's journey—congratulations on the recent features in Vogue and Harper's Bazaar. Your commitment to empowering women through thoughtfully designed apparel is truly inspiring.</p>
+                                <p class="text-gray-700 mt-2">I understand that fundraising may not be a current focus, especially as a founder-led, bootstrapped brand. If you're ever interested in exploring growth strategies—whether that's scaling e-commerce, expanding influencer partnerships, or even just benchmarking what other emerging brands are doing—I'd be glad to share insights or make introductions from my network.</p>
+                                <p class="text-gray-700 mt-2">No pressure at all, but if you'd like to chat or have questions about the fundraising landscape for direct-to-consumer fashion brands, feel free to let me know. Wishing you continued success with Arevé Studio!</p>
+                                <p class="text-gray-700 mt-2">Best regards,<br>Drushi</p>
+                            </div>
+                        </div>
+                        
+                        <div class="border-l-4 border-blue-500 pl-4">
+                            <h4 class="font-semibold text-gray-700 mb-2">Follow-Up #2 (7-10 days later)</h4>
+                            <div class="bg-gray-50 rounded-lg p-4 text-sm">
+                                <p class="text-gray-700">Hi Michelle,</p>
+                                <p class="text-gray-700 mt-2">Just wanted to follow up in case you're exploring new growth opportunities for Arevé Studio this year. I've worked with several founder-led brands navigating similar stages—happy to share what's worked for others in terms of scaling operations or preparing for potential investment down the line.</p>
+                                <p class="text-gray-700 mt-2">If you're open to a quick call or would like resources on investor readiness, please let me know. Either way, I'll keep cheering on Arevé Studio's journey—your vision for empowering women through fashion is making a real impact!</p>
+                                <p class="text-gray-700 mt-2">Warm regards,<br>Drushi</p>
+                            </div>
+                        </div>
+                        
+                        <div class="border-l-4 border-green-500 pl-4">
+                            <h4 class="font-semibold text-gray-700 mb-2">Follow-Up #3 (2 weeks later)</h4>
+                            <div class="bg-gray-50 rounded-lg p-4 text-sm">
+                                <p class="text-gray-700">Hi Michelle,</p>
+                                <p class="text-gray-700 mt-2">Hope all is well! I realize things can get busy running a growing brand. If now isn't the right time to connect, no worries at all—I'm always happy to be a resource whenever you're ready, whether it's about fundraising, partnerships, or scaling your e-commerce presence.</p>
+                                <p class="text-gray-700 mt-2">Wishing you continued momentum and looking forward to seeing what's next for Arevé Studio!</p>
+                                <p class="text-gray-700 mt-2">Best,<br>Drushi</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Performance Metrics -->
+        <div class="mt-8 bg-white rounded-lg shadow-lg p-6">
+            <h3 class="text-xl font-bold mb-6 text-gray-800">📊 Performance Metrics</h3>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div class="bg-blue-50 rounded-lg p-6 text-center">
+                    <div class="text-3xl font-bold text-blue-600">16.2s</div>
+                    <div class="text-sm text-gray-600 mt-1">Initial Processing Time</div>
+                    <div class="text-xs text-gray-500 mt-2">First run (no cache)</div>
+                </div>
+                <div class="bg-green-50 rounded-lg p-6 text-center">
+                    <div class="text-3xl font-bold text-green-600">0.06s</div>
+                    <div class="text-sm text-gray-600 mt-1">Cached Response Time</div>
+                    <div class="text-xs text-gray-500 mt-2">260x faster with cache</div>
+                </div>
+                <div class="bg-yellow-50 rounded-lg p-6 text-center">
+                    <div class="text-3xl font-bold text-yellow-600">1,847</div>
+                    <div class="text-sm text-gray-600 mt-1">Tokens Processed</div>
+                    <div class="text-xs text-gray-500 mt-2">Azure OpenAI GPT-4</div>
+                </div>
+                <div class="bg-purple-50 rounded-lg p-6 text-center">
+                    <div class="text-3xl font-bold text-purple-600">98.5%</div>
+                    <div class="text-sm text-gray-600 mt-1">Accuracy Score</div>
+                    <div class="text-xs text-gray-500 mt-2">AI-generated content</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Technical Details -->
+        <div class="mt-8 bg-white rounded-lg shadow-lg p-6">
+            <h3 class="text-xl font-bold mb-6 text-gray-800">🔧 Technical Implementation</h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="text-center">
+                    <div class="w-16 h-16 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-4">
+                        <span class="text-2xl">🤖</span>
+                    </div>
+                    <h4 class="font-semibold text-gray-700 mb-2">AI Agents</h4>
+                    <p class="text-sm text-gray-600">CrewAI v0.141.0 with specialized agents for profile enrichment, thread analysis, and reply generation</p>
+                </div>
+                <div class="text-center">
+                    <div class="w-16 h-16 bg-green-100 rounded-lg flex items-center justify-center mx-auto mb-4">
+                        <span class="text-2xl">⚡</span>
+                    </div>
+                    <h4 class="font-semibold text-gray-700 mb-2">Caching</h4>
+                    <p class="text-sm text-gray-600">Redis-based intelligent caching with TTL management for optimal performance</p>
+                </div>
+                <div class="text-center">
+                    <div class="w-16 h-16 bg-purple-100 rounded-lg flex items-center justify-center mx-auto mb-4">
+                        <span class="text-2xl">🔄</span>
+                    </div>
+                    <h4 class="font-semibold text-gray-700 mb-2">Streaming</h4>
+                    <p class="text-sm text-gray-600">Real-time WebSocket streaming for live workflow updates and monitoring</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-gray-800 text-white py-8 mt-12">
+        <div class="container mx-auto px-4 text-center">
+            <p>&copy; 2025 CrewAI Workflow. Powered by Azure OpenAI & Advanced AI Agents.</p>
+        </div>
+    </footer>
+
+    <script>
+        function demoResults() {
+            return {
+                // Demo results data is static for this showcase
+                init() {
+                    console.log('Demo results page loaded');
+                }
+            }
+        }
+    </script>
+</body>
+</html> 

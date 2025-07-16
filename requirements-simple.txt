@@ -1,0 +1,41 @@
+# Core CrewAI and LangChain
+crewai==0.141.0
+langchain-openai
+langchain
+langchain-core
+langchain-text-splitters
+langchain-community
+
+# Web Framework
+fastapi==0.116.1
+uvicorn==0.35.0
+jinja2
+python-multipart
+
+# Environment and Configuration
+python-dotenv
+
+# Background Tasks and Caching
+celery
+redis
+
+# Database
+neo4j
+
+# Document Processing
+markitdown
+
+# AI/ML Dependencies
+openai
+tiktoken
+tokenizers
+pydantic
+
+# Monitoring and Rate Limiting
+sentry-sdk
+slowapi
+
+# Utilities
+click
+requests
+numpy

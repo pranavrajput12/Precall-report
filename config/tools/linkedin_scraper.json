@@ -1,0 +1,14 @@
+{
+  "id": "linkedin_scraper",
+  "name": "LinkedIn Scraper",
+  "description": "Scrape LinkedIn profiles and company pages",
+  "enabled": false,
+  "provider": "custom",
+  "config": {
+    "rate_limit": 10,
+    "timeout": 30
+  },
+  "created_at": "2025-07-16T04:37:55.392029",
+  "updated_at": "2025-07-16T04:37:55.392030",
+  "version": 1
+}

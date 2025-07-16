@@ -1,0 +1,129 @@
+body {
+  font-family: 'Inter', Arial, sans-serif;
+  margin: 0;
+  background: #f4f7fa;
+  color: #222;
+}
+.container {
+  max-width: 600px;
+  margin: 3em auto;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.07);
+  padding: 2.5em 2em 2em 2em;
+}
+header {
+  text-align: center;
+  margin-bottom: 2em;
+}
+h1 {
+  font-size: 2.2em;
+  color: #2c3e50;
+  margin-bottom: 0.2em;
+}
+.subtitle {
+  color: #6c7a89;
+  font-size: 1.1em;
+  margin-bottom: 0.5em;
+}
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2em;
+}
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3em;
+}
+label {
+  font-weight: 500;
+  margin-bottom: 0.2em;
+}
+input, textarea, select {
+  font-size: 1em;
+  padding: 0.7em;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #f9fafb;
+  transition: border 0.2s;
+}
+input:focus, textarea:focus, select:focus {
+  border: 1.5px solid #4f8cff;
+  outline: none;
+  background: #fff;
+}
+button {
+  background: linear-gradient(90deg, #4f8cff 0%, #38b6ff 100%);
+  color: #fff;
+  border: none;
+  padding: 0.9em 0;
+  border-radius: 6px;
+  font-size: 1.1em;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 0.5em;
+  transition: background 0.2s;
+}
+button:hover {
+  background: linear-gradient(90deg, #38b6ff 0%, #4f8cff 100%);
+}
+.optional {
+  color: #b0b0b0;
+  font-size: 0.95em;
+}
+#loading {
+  display: flex;
+  align-items: center;
+  gap: 0.7em;
+  color: #4f8cff;
+  font-weight: 500;
+  margin-top: 1em;
+}
+.spinner {
+  width: 22px;
+  height: 22px;
+  border: 3px solid #e3e8ee;
+  border-top: 3px solid #4f8cff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+.error {
+  color: #e74c3c;
+  background: #fff0f0;
+  border: 1px solid #f5c6cb;
+  border-radius: 6px;
+  padding: 0.7em 1em;
+  margin-top: 1em;
+  font-size: 1em;
+}
+#result-section {
+  margin-top: 2.5em;
+  background: #f9fafb;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px #e3e8ee;
+  padding: 1.5em 1em;
+}
+#result pre {
+  background: #fff;
+  border-radius: 6px;
+  padding: 1em;
+  font-size: 1em;
+  overflow-x: auto;
+  color: #222;
+}
+.hidden {
+  display: none;
+}
+@media (max-width: 700px) {
+  .container {
+    padding: 1.2em 0.5em;
+  }
+  h1 {
+    font-size: 1.4em;
+  }
+} 

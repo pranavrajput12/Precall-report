@@ -1,0 +1,45 @@
+# Core Framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+python-multipart==0.0.6
+
+# CrewAI and AI Tools
+crewai==0.1.0
+langchain==0.1.0
+langchain-community==0.1.0
+openai==1.3.7
+
+# Database and Caching
+redis==5.0.1
+sqlalchemy==2.0.23
+
+# Task Queue
+celery==5.3.4
+
+# Monitoring and Logging
+sentry-sdk==1.38.0
+langtrace-python-sdk==1.0.0
+
+# API Rate Limiting
+slowapi==0.1.9
+
+# Utilities
+jinja2==3.1.2
+markitdown==0.1.0
+python-dotenv==1.0.0
+httpx==0.25.2
+requests==2.31.0
+websockets==12.0
+
+# Data Processing
+pandas==2.1.4
+numpy==1.26.2
+
+# Optional: For embeddings and semantic search
+sentence-transformers==2.2.2
+
+# Development
+pytest==7.4.3
+black==23.11.0
+flake8==6.1.0

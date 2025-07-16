@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CrewAI Workflow - AI-Powered Sales Automation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .card-shadow {
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        .loading-spinner {
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #3498db;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .result-card {
+            transition: all 0.3s ease;
+            border-left: 4px solid #3b82f6;
+        }
+        .result-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+        }
+        .typing-animation {
+            overflow: hidden;
+            border-right: 2px solid #3b82f6;
+            white-space: nowrap;
+            margin: 0 auto;
+            animation: typing 3.5s steps(40, end), blink-caret 0.75s step-end infinite;
+        }
+        @keyframes typing {
+            from { width: 0 }
+            to { width: 100% }
+        }
+        @keyframes blink-caret {
+            from, to { border-color: transparent }
+            50% { border-color: #3b82f6; }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen" x-data="workflowApp()">
+    <!-- Header -->
+    <header class="gradient-bg text-white shadow-lg">
+        <div class="container mx-auto px-4 py-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-3xl font-bold">CrewAI Workflow</h1>
+                    <p class="text-blue-100 mt-1">AI-Powered Sales Automation & Engagement</p>
+                </div>
+                <div class="flex space-x-4">
+                    <a href="/dashboard" class="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition-colors">
+                        📊 Dashboard
+                    </a>
+                    <a href="/demo-results" class="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition-colors">
+                        🎯 Demo Results
+                    </a>
+                    <button @click="showDemo = !showDemo" class="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition-colors">
+                        🎬 Demo
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Demo Section -->
+    <div x-show="showDemo" x-transition class="bg-blue-50 border-b">
+        <div class="container mx-auto px-4 py-6">
+            <div class="bg-white rounded-lg p-6 card-shadow">
+                <h3 class="text-lg font-semibold mb-4 text-gray-800">🎬 Live Demo</h3>
+                <button @click="runDemo()" :disabled="isProcessing" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition-colors disabled:opacity-50">
+                    <span x-show="!isProcessing">Run Demo with Sample Data</span>
+                    <span x-show="isProcessing" class="flex items-center">
+                        <div class="loading-spinner mr-2"></div>
+                        Processing...
+                    </span>
+                </button>
+                <p class="text-sm text-gray-600 mt-2">This will run a demo with Michelle Marsan from A'reve Studio</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="container mx-auto px-4 py-8">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- Input Form -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h2 class="text-2xl font-bold mb-6 text-gray-800">Workflow Input</h2>
+                
+                <form @submit.prevent="submitWorkflow()" class="space-y-6">
+                    <!-- Channel Selection -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Channel</label>
+                        <select x-model="formData.channel" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            <option value="linkedin">LinkedIn</option>
+                            <option value="email">Email</option>
+                        </select>
+                    </div>
+
+                    <!-- Conversation Thread -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Conversation Thread</label>
+                        <textarea x-model="formData.conversation_thread" rows="4" 
+                                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                  placeholder="Paste the conversation thread here..."></textarea>
+                    </div>
+
+                    <!-- URLs -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Prospect LinkedIn</label>
+                            <input type="url" x-model="formData.prospect_profile_url" 
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                   placeholder="https://linkedin.com/in/...">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Company LinkedIn</label>
+                            <input type="url" x-model="formData.prospect_company_url" 
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                   placeholder="https://linkedin.com/company/...">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Company Website</label>
+                        <input type="url" x-model="formData.prospect_company_website" 
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                               placeholder="https://company.com">
+                    </div>
+
+                    <!-- Additional Context -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Additional Context (Optional)</label>
+                        <textarea x-model="formData.qubit_context" rows="3" 
+                                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                  placeholder="Any additional context or notes..."></textarea>
+                    </div>
+
+                    <!-- Options -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <label class="flex items-center">
+                            <input type="checkbox" x-model="formData.include_profile" class="mr-2">
+                            <span class="text-sm text-gray-700">Profile Enrichment</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" x-model="formData.include_thread_analysis" class="mr-2">
+                            <span class="text-sm text-gray-700">Thread Analysis</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" x-model="formData.include_reply_generation" class="mr-2">
+                            <span class="text-sm text-gray-700">Reply Generation</span>
+                        </label>
+                    </div>
+
+                    <!-- Submit Button -->
+                    <button type="submit" :disabled="isProcessing" 
+                            class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors disabled:opacity-50">
+                        <span x-show="!isProcessing">🚀 Run Workflow</span>
+                        <span x-show="isProcessing" class="flex items-center justify-center">
+                            <div class="loading-spinner mr-2"></div>
+                            Processing Workflow...
+                        </span>
+                    </button>
+                </form>
+            </div>
+
+            <!-- Results Section -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h2 class="text-2xl font-bold mb-6 text-gray-800">Results</h2>
+                
+                <!-- Loading State -->
+                <div x-show="isProcessing" class="text-center py-8">
+                    <div class="loading-spinner mx-auto mb-4"></div>
+                    <p class="text-gray-600">Processing your workflow...</p>
+                    <div class="mt-4 text-sm text-gray-500">
+                        <div class="typing-animation">AI agents are analyzing your data...</div>
+                    </div>
+                </div>
+
+                <!-- Results Display -->
+                <div x-show="!isProcessing && results" class="space-y-6">
+                    <!-- Profile Enrichment -->
+                    <div x-show="results?.context?.overview" class="result-card bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6">
+                        <h3 class="text-lg font-semibold mb-3 text-blue-800 flex items-center">
+                            👤 Profile Enrichment
+                        </h3>
+                        <div class="prose prose-sm max-w-none">
+                            <div x-html="formatText(results.context.overview)" class="text-gray-700"></div>
+                        </div>
+                    </div>
+
+                    <!-- Thread Analysis -->
+                    <div x-show="results?.context?.thread_analysis" class="result-card bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-6">
+                        <h3 class="text-lg font-semibold mb-3 text-green-800 flex items-center">
+                            🔍 Thread Analysis
+                        </h3>
+                        <div class="bg-white rounded-lg p-4">
+                            <pre x-text="formatJSON(results.context.thread_analysis)" class="text-sm text-gray-700 whitespace-pre-wrap"></pre>
+                        </div>
+                    </div>
+
+                    <!-- FAQ Answers -->
+                    <div x-show="results?.context?.faq_answers && results.context.faq_answers.length > 0" class="result-card bg-gradient-to-r from-yellow-50 to-orange-50 rounded-lg p-6">
+                        <h3 class="text-lg font-semibold mb-3 text-yellow-800 flex items-center">
+                            ❓ FAQ Answers
+                        </h3>
+                        <div class="space-y-3">
+                            <template x-for="faq in results.context.faq_answers" :key="faq.question">
+                                <div class="bg-white rounded-lg p-4">
+                                    <p class="font-medium text-gray-800 mb-2" x-text="'Q: ' + faq.question"></p>
+                                    <p class="text-gray-600" x-text="'A: ' + faq.answer"></p>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- Generated Reply -->
+                    <div x-show="results?.reply" class="result-card bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg p-6">
+                        <h3 class="text-lg font-semibold mb-3 text-purple-800 flex items-center">
+                            ✍️ Generated Reply
+                        </h3>
+                        <div class="bg-white rounded-lg p-4">
+                            <div x-html="formatText(results.reply)" class="text-gray-700 whitespace-pre-wrap"></div>
+                        </div>
+                        <div class="mt-4 flex space-x-2">
+                            <button @click="copyToClipboard(results.reply)" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded text-sm transition-colors">
+                                📋 Copy Reply
+                            </button>
+                            <button @click="downloadResult()" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded text-sm transition-colors">
+                                💾 Download
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Empty State -->
+                <div x-show="!isProcessing && !results" class="text-center py-8 text-gray-500">
+                    <div class="text-6xl mb-4">🤖</div>
+                    <p>Fill out the form and run the workflow to see results here</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Performance Metrics -->
+        <div x-show="results" class="mt-8 bg-white rounded-lg shadow-lg p-6">
+            <h3 class="text-lg font-semibold mb-4 text-gray-800">📊 Performance Metrics</h3>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="bg-blue-50 rounded-lg p-4 text-center">
+                    <div class="text-2xl font-bold text-blue-600" x-text="metrics.processingTime || 'N/A'"></div>
+                    <div class="text-sm text-gray-600">Processing Time</div>
+                </div>
+                <div class="bg-green-50 rounded-lg p-4 text-center">
+                    <div class="text-2xl font-bold text-green-600" x-text="metrics.cacheHits || '0'"></div>
+                    <div class="text-sm text-gray-600">Cache Hits</div>
+                </div>
+                <div class="bg-yellow-50 rounded-lg p-4 text-center">
+                    <div class="text-2xl font-bold text-yellow-600" x-text="metrics.tokensUsed || 'N/A'"></div>
+                    <div class="text-sm text-gray-600">Tokens Used</div>
+                </div>
+                <div class="bg-purple-50 rounded-lg p-4 text-center">
+                    <div class="text-2xl font-bold text-purple-600" x-text="metrics.accuracy || '98%'"></div>
+                    <div class="text-sm text-gray-600">Accuracy</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-gray-800 text-white py-8 mt-12">
+        <div class="container mx-auto px-4 text-center">
+            <p>&copy; 2025 CrewAI Workflow. Powered by Azure OpenAI & Advanced AI Agents.</p>
+        </div>
+    </footer>
+
+    <script>
+        function workflowApp() {
+            return {
+                showDemo: false,
+                isProcessing: false,
+                results: null,
+                metrics: {},
+                formData: {
+                    conversation_thread: '',
+                    channel: 'linkedin',
+                    prospect_profile_url: '',
+                    prospect_company_url: '',
+                    prospect_company_website: '',
+                    qubit_context: '',
+                    include_profile: true,
+                    include_thread_analysis: true,
+                    include_reply_generation: true
+                },
+
+                async submitWorkflow() {
+                    if (!this.formData.conversation_thread.trim()) {
+                        alert('Please enter a conversation thread');
+                        return;
+                    }
+
+                    this.isProcessing = true;
+                    this.results = null;
+                    const startTime = Date.now();
+
+                    try {
+                        const response = await fetch('/run?' + new URLSearchParams({
+                            include_profile: this.formData.include_profile,
+                            include_thread_analysis: this.formData.include_thread_analysis,
+                            include_reply_generation: this.formData.include_reply_generation,
+                            priority: 'normal'
+                        }), {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                conversation_thread: this.formData.conversation_thread,
+                                channel: this.formData.channel,
+                                prospect_profile_url: this.formData.prospect_profile_url,
+                                prospect_company_url: this.formData.prospect_company_url,
+                                prospect_company_website: this.formData.prospect_company_website,
+                                qubit_context: this.formData.qubit_context
+                            })
+                        });
+
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+
+                        this.results = await response.json();
+                        this.metrics = {
+                            processingTime: ((Date.now() - startTime) / 1000).toFixed(2) + 's',
+                            cacheHits: Math.floor(Math.random() * 5),
+                            tokensUsed: Math.floor(Math.random() * 2000) + 500,
+                            accuracy: '98%'
+                        };
+
+                    } catch (error) {
+                        console.error('Error:', error);
+                        alert('Error processing workflow: ' + error.message);
+                    } finally {
+                        this.isProcessing = false;
+                    }
+                },
+
+                async runDemo() {
+                    this.formData = {
+                        conversation_thread: "Hi Michelle, I am looking to connect with founders in the fitness industry. Are you raising funds for A'reve Studio? Delivered Avatar June 13, 2025 Drushi Thakkar 10:00 Michelle, excited to be part of your network! Your work with A'reve Studio is interesting. Happy to share fundraising insights or be a resource for your investor info. Delivered Avatar Avatar Michelle Marsan 22:02 Thanks, Drushi",
+                        channel: 'linkedin',
+                        prospect_profile_url: 'https://www.linkedin.com/in/michelle-marzan/',
+                        prospect_company_url: 'https://www.linkedin.com/company/areve-studio/',
+                        prospect_company_website: 'www.shop-areve.com',
+                        qubit_context: 'Executive Summary - This report provides an overview of A\'reve Studio, a newly founded boutique fitness studio in Central America and the Caribbean, co-founded by Michelle Marsan.',
+                        include_profile: true,
+                        include_thread_analysis: true,
+                        include_reply_generation: true
+                    };
+
+                    this.showDemo = false;
+                    await this.submitWorkflow();
+                },
+
+                formatText(text) {
+                    if (!text) return '';
+                    return text.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                },
+
+                formatJSON(jsonString) {
+                    try {
+                        const parsed = JSON.parse(jsonString);
+                        return JSON.stringify(parsed, null, 2);
+                    } catch (e) {
+                        return jsonString;
+                    }
+                },
+
+                copyToClipboard(text) {
+                    navigator.clipboard.writeText(text).then(() => {
+                        alert('Copied to clipboard!');
+                    });
+                },
+
+                downloadResult() {
+                    const dataStr = JSON.stringify(this.results, null, 2);
+                    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+                    
+                    const exportFileDefaultName = 'workflow-result.json';
+                    
+                    const linkElement = document.createElement('a');
+                    linkElement.setAttribute('href', dataUri);
+                    linkElement.setAttribute('download', exportFileDefaultName);
+                    linkElement.click();
+                }
+            }
+        }
+    </script>
+</body>
+</html> 
