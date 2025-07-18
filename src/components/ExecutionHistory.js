@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Clock,
@@ -12,7 +12,9 @@ import {
   TrendingUp,
   TrendingDown,
   Zap,
-  RefreshCw
+  RefreshCw,
+  MessageSquare,
+  Send
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -32,12 +34,70 @@ const ExecutionHistory = () => {
   const [activeTab, setActiveTab] = useState('executions');
   const [selectedExecution, setSelectedExecution] = useState(null);
   const [selectedTest, setSelectedTest] = useState(null);
+  const [workflowForm, setWorkflowForm] = useState({
+    conversation_thread: '',
+    channel: 'LinkedIn',
+    prospect_profile_url: '',
+    prospect_company_url: '',
+    prospect_company_website: '',
+    qubit_context: ''
+  });
+  const [isRunningWorkflow, setIsRunningWorkflow] = useState(false);
 
   const { data: executions = [], isLoading: execLoading, refetch: refetchExecutions } = useQuery({
     queryKey: ['execution-history'],
     queryFn: fetchExecutionHistory,
     refetchInterval: 5000 // Auto-refresh every 5 seconds
   });
+
+  const createDemoExecution = async () => {
+    try {
+      const response = await fetch('/api/demo-execution', { method: 'POST' });
+      if (response.ok) {
+        toast.success('Demo execution created!');
+        refetchExecutions();
+      } else {
+        toast.error('Failed to create demo execution');
+      }
+    } catch (error) {
+      toast.error('Error creating demo execution');
+    }
+  };
+
+  const runWorkflow = async () => {
+    setIsRunningWorkflow(true);
+    try {
+      const response = await fetch('/run', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(workflowForm),
+      });
+      
+      if (response.ok) {
+        await response.json();
+        toast.success('Workflow started successfully!');
+        refetchExecutions();
+        // Reset form
+        setWorkflowForm({
+          conversation_thread: '',
+          channel: 'LinkedIn',
+          prospect_profile_url: '',
+          prospect_company_url: '',
+          prospect_company_website: '',
+          qubit_context: ''
+        });
+      } else {
+        const error = await response.json();
+        toast.error(`Failed to run workflow: ${error.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      toast.error('Error running workflow');
+    } finally {
+      setIsRunningWorkflow(false);
+    }
+  };
 
   const { data: testResults = [], isLoading: testLoading, refetch: refetchTests } = useQuery({
     queryKey: ['test-results'],
@@ -108,9 +168,27 @@ const ExecutionHistory = () => {
   return (
     <div className="p-6 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Execution History & Test Results</h1>
-        <p className="text-gray-600">Monitor workflow executions and test performance</p>
+      <div className="mb-6 flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Execution History & Test Results</h1>
+          <p className="text-gray-600">Monitor workflow executions and test performance</p>
+        </div>
+        <div className="flex gap-3">
+          <button
+            onClick={createDemoExecution}
+            className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
+          >
+            <Play className="w-4 h-4" />
+            Create Demo
+          </button>
+          <button
+            onClick={() => window.location.href = '/dashboard'}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
+          >
+            <Zap className="w-4 h-4" />
+            Run New Workflow
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -140,6 +218,19 @@ const ExecutionHistory = () => {
             <div className="flex items-center gap-2">
               <BarChart2 className="w-4 h-4" />
               Test Results ({testResults.length})
+            </div>
+          </button>
+          <button
+            onClick={() => setActiveTab('run')}
+            className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
+              activeTab === 'run'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <Zap className="w-4 h-4" />
+              Run Workflow
             </div>
           </button>
         </nav>
@@ -263,20 +354,42 @@ const ExecutionHistory = () => {
 
                 {/* Output */}
                 {selectedExecution.output && (
-                  <div>
-                    <h4 className="text-sm font-medium text-gray-700 mb-2">Output</h4>
-                    <div className="bg-gray-50 rounded p-3 text-sm">
-                      <div className="space-y-1">
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Quality Score:</span>
-                          <span className="font-medium">{selectedExecution.output.quality_score}%</span>
+                  <div className="mt-6">
+                    <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                      <MessageSquare className="w-5 h-5 text-blue-600" />
+                      Generated Output
+                    </h4>
+                    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-6">
+                      <div className="space-y-4">
+                        {/* Metrics Row */}
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="bg-white rounded-lg p-3 border border-blue-100">
+                            <div className="text-xs text-gray-600 mb-1">Quality Score</div>
+                            <div className="text-2xl font-bold text-green-600">
+                              {selectedExecution.output.quality_score}%
+                            </div>
+                          </div>
+                          <div className="bg-white rounded-lg p-3 border border-blue-100">
+                            <div className="text-xs text-gray-600 mb-1">Response Rate</div>
+                            <div className="text-2xl font-bold text-blue-600">
+                              {(selectedExecution.output.predicted_response_rate * 100).toFixed(0)}%
+                            </div>
+                          </div>
                         </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Response Rate:</span>
-                          <span className="font-medium">{(selectedExecution.output.predicted_response_rate * 100).toFixed(0)}%</span>
+                        
+                        {/* Generated Message */}
+                        <div>
+                          <h5 className="text-base font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                            <Send className="w-4 h-4 text-gray-600" />
+                            Generated Message
+                          </h5>
+                          <div className="bg-white border-2 border-gray-200 rounded-xl p-5 text-sm leading-relaxed max-h-80 overflow-y-auto shadow-sm">
+                            <div className="whitespace-pre-wrap font-medium text-gray-900">
+                              {selectedExecution.output.message}
+                            </div>
+                          </div>
                         </div>
                       </div>
-                      <p className="text-xs text-gray-700 mt-2 italic">"{selectedExecution.output.message}"</p>
                     </div>
                   </div>
                 )}
@@ -294,6 +407,113 @@ const ExecutionHistory = () => {
                 <p className="text-gray-600">Select an execution to view details</p>
               </div>
             )}
+          </div>
+        </div>
+      ) : activeTab === 'run' ? (
+        <div className="max-w-2xl mx-auto">
+          <div className="bg-white rounded-lg border p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Run LinkedIn Outreach Workflow</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Conversation Thread
+                </label>
+                <textarea
+                  value={workflowForm.conversation_thread}
+                  onChange={(e) => setWorkflowForm({...workflowForm, conversation_thread: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={3}
+                  placeholder="Enter the conversation thread or context..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Channel
+                </label>
+                <select
+                  value={workflowForm.channel}
+                  onChange={(e) => setWorkflowForm({...workflowForm, channel: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="LinkedIn">LinkedIn</option>
+                  <option value="Email">Email</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Prospect Profile URL
+                </label>
+                <input
+                  type="url"
+                  value={workflowForm.prospect_profile_url}
+                  onChange={(e) => setWorkflowForm({...workflowForm, prospect_profile_url: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="https://linkedin.com/in/example"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Company LinkedIn URL
+                </label>
+                <input
+                  type="url"
+                  value={workflowForm.prospect_company_url}
+                  onChange={(e) => setWorkflowForm({...workflowForm, prospect_company_url: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="https://linkedin.com/company/example"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Company Website
+                </label>
+                <input
+                  type="url"
+                  value={workflowForm.prospect_company_website}
+                  onChange={(e) => setWorkflowForm({...workflowForm, prospect_company_website: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="https://example.com"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Qubit Context (Optional)
+                </label>
+                <textarea
+                  value={workflowForm.qubit_context}
+                  onChange={(e) => setWorkflowForm({...workflowForm, qubit_context: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={2}
+                  placeholder="Additional context about Qubit Capital or investment focus..."
+                />
+              </div>
+
+              <div className="pt-4">
+                <button
+                  onClick={runWorkflow}
+                  disabled={isRunningWorkflow || !workflowForm.conversation_thread || !workflowForm.prospect_profile_url}
+                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-6 py-3 rounded-lg flex items-center justify-center gap-2 transition-colors"
+                >
+                  {isRunningWorkflow ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      Running Workflow...
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="w-4 h-4" />
+                      Run Workflow
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       ) : (
