@@ -438,5 +438,49 @@
       "predicted_response_rate": 0.35
     },
     "duration": 52.024246
+  },
+  {
+    "workflow_id": "linkedin-workflow",
+    "workflow_name": "LinkedIn Outreach Workflow",
+    "status": "completed",
+    "input_data": {
+      "conversation_thread": "Testing new execution tracking - this is a test run to verify latest executions show up",
+      "channel": "linkedin",
+      "prospect_profile_url": "https://linkedin.com/in/test-user",
+      "prospect_company_url": "https://linkedin.com/company/test-company",
+      "prospect_company_website": "https://test.com",
+      "qubit_context": "Test context for new execution"
+    },
+    "steps": [
+      {
+        "name": "Profile Research",
+        "status": "completed",
+        "duration": 180,
+        "result": "Successfully analyzed profile and company data"
+      },
+      {
+        "name": "Message Generation",
+        "status": "completed",
+        "duration": 240,
+        "result": "Generated personalized message with 85% quality score"
+      },
+      {
+        "name": "Quality Review",
+        "status": "completed",
+        "duration": 120,
+        "result": "Message approved: Professional tone, clear value proposition"
+      }
+    ],
+    "current_step": "Completed",
+    "progress": 100,
+    "id": "exec_011",
+    "started_at": "2025-07-22T04:32:53.316194",
+    "completed_at": "2025-07-22T04:33:37.854198",
+    "output": {
+      "message": "Hi [Test User],\n\nThanks for sharing your note about execution tracking\u2014always great to connect with leaders who are hands-on in optimizing product operations.\n\nI\u2019ve been following Test Company\u2019s impressive momentum, especially your recent Series B and EMEA expansion. Your article on \u201cDriving Retention through Personalization\u201d really resonated with me\u2014personalization at scale is a challenge we see across the SaaS landscape.\n\nGiven your focus on measurable impact and seamless integration, I wanted to share a quick resource: [Case Study \u2013 How [Similar SaaS Company] Reduced Churn by 25% with Advanced Execution Tracking] (insert raw URL). It highlights how real-time visibility and actionable analytics can accelerate adoption and drive retention\u2014two areas I know are top of mind for you and your team.\n\nWould you be open to a brief chat to explore how we\u2019re helping product leaders like yourself gain deeper execution insights\u2014without disrupting existing workflows? Even a 15-minute call could be valuable.\n\nLooking forward to your thoughts,  \n[Your Name]",
+      "quality_score": 85,
+      "predicted_response_rate": 0.35
+    },
+    "duration": 44.538004
   }
 ]

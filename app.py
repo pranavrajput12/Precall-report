@@ -28,7 +28,8 @@ from config_api import config_app
 from config_manager import config_manager
 # Import enhanced systems
 from evaluation_system import evaluation_system
-from observability import observability_manager
+# from observability import observability_manager
+from simple_observability import simple_observability as observability_manager
 from performance_optimization import performance_optimizer
 from tasks import run_workflow_task
 from workflow import (run_reply_generation_template, run_workflow,
@@ -68,6 +69,20 @@ def load_execution_history():
 
 # Load existing history on startup
 load_execution_history()
+
+# Initialize execution counter based on existing history
+if execution_history:
+    # Find the highest execution number
+    max_id = 0
+    for exec in execution_history:
+        if 'id' in exec and exec['id'].startswith('exec_'):
+            try:
+                num = int(exec['id'].replace('exec_', ''))
+                max_id = max(max_id, num)
+            except:
+                pass
+    execution_counter = max_id + 1
+    logger.info(f"Initialized execution counter to {execution_counter} based on existing history")
 
 def add_execution_record(execution_data: Dict):
     """Add a new execution record to history"""

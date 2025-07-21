@@ -12,7 +12,7 @@ const fetchTraces = async () => {
 };
 
 const fetchMetrics = async () => {
-  const res = await fetch('/api/observability/metrics');
+  const res = await fetch('/api/performance/metrics');
   if (!res.ok) throw new Error('Failed to fetch metrics');
   return res.json();
 };

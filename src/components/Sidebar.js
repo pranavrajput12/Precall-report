@@ -16,7 +16,8 @@ import {
   BarChart3,
   ListChecks,
   History,
-  BookOpen
+  BookOpen,
+  List
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -81,6 +82,13 @@ const navigationItems = [
     href: '/history',
     icon: History,
     description: 'Execution history & test results'
+  },
+  {
+    name: 'All Runs',
+    href: '/all-runs',
+    icon: List,
+    description: 'View all workflow runs',
+    highlight: true
   },
   {
     name: 'Knowledge Base',

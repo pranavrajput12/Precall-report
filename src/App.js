@@ -22,6 +22,7 @@ import Sidebar from './components/Sidebar';
 import ExecutionHistory from './components/ExecutionHistory';
 import KnowledgeBase from './components/KnowledgeBase';
 import RunWorkflow from './pages/RunWorkflow';
+import AllRuns from './pages/AllRuns';
 import './App.css';
 
 // Initialize React Scan for performance monitoring
@@ -157,6 +158,7 @@ function App() {
                       <Route path="/tools" element={<ToolManager />} />
                       <Route path="/settings" element={<Settings />} />
                       <Route path="/history" element={<ExecutionHistory />} />
+                      <Route path="/all-runs" element={<AllRuns />} />
                       <Route path="/knowledge-base" element={<KnowledgeBase />} />
                       {/* Add more routes as needed */}
                     </Routes>

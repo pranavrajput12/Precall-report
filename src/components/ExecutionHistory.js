@@ -22,6 +22,8 @@ const fetchExecutionHistory = async () => {
   const response = await fetch('/api/execution-history');
   if (!response.ok) throw new Error('Failed to fetch execution history');
   const data = await response.json();
+  console.log('Execution history data:', data);
+  console.log('Executions array:', data.executions);
   return data.executions || [];
 };
 
@@ -184,7 +186,14 @@ const ExecutionHistory = () => {
             Create Demo
           </button>
           <button
-            onClick={() => window.location.href = '/dashboard'}
+            onClick={() => window.location.href = '/all-runs'}
+            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
+          >
+            <MessageSquare className="w-4 h-4" />
+            View All Runs
+          </button>
+          <button
+            onClick={() => window.location.href = '/run'}
             className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
           >
             <Zap className="w-4 h-4" />
