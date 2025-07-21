@@ -390,6 +390,8 @@ async def run_reply_generation_streaming(context, channel):
         CONTEXT AND INTELLIGENCE:
         {json.dumps(context, indent=2)}
 
+        IMPORTANT: If FAQ answers are provided in the context, you MUST incorporate them into your response strategy. Use these official answers to address any questions the prospect has asked.
+
         GENERATE A COMPREHENSIVE LINKEDIN RESPONSE STRATEGY WITH THESE COMPONENTS:
 
         ## IMMEDIATE RESPONSE
@@ -457,6 +459,8 @@ async def run_reply_generation_streaming(context, channel):
 
         CONTEXT AND INTELLIGENCE:
         {json.dumps(context, indent=2)}
+
+        IMPORTANT: If FAQ answers are provided in the context, you MUST incorporate them into your response strategy. Use these official answers to address any questions the prospect has asked.
 
         GENERATE A COMPREHENSIVE EMAIL RESPONSE STRATEGY WITH THESE COMPONENTS:
 
@@ -812,6 +816,8 @@ def run_reply_generation(context, channel):
         CONTEXT AND INTELLIGENCE:
         {json.dumps(context, indent=2)}
 
+        IMPORTANT: If FAQ answers are provided in the context, you MUST incorporate them into your response strategy. Use these official answers to address any questions the prospect has asked.
+
         GENERATE A COMPREHENSIVE LINKEDIN RESPONSE STRATEGY WITH THESE COMPONENTS:
 
         ## IMMEDIATE RESPONSE
@@ -879,6 +885,8 @@ def run_reply_generation(context, channel):
 
         CONTEXT AND INTELLIGENCE:
         {json.dumps(context, indent=2)}
+
+        IMPORTANT: If FAQ answers are provided in the context, you MUST incorporate them into your response strategy. Use these official answers to address any questions the prospect has asked.
 
         GENERATE A COMPREHENSIVE EMAIL RESPONSE STRATEGY WITH THESE COMPONENTS:
 
@@ -1110,31 +1118,46 @@ async def run_workflow_parallel_streaming(
         try:
             thread_data = json.loads(
                 thread_analysis) if thread_analysis else {}
-            questions = thread_data.get("explicit_questions", [])
-        except Exception:
+            # Get questions from the correct location in the JSON structure
+            personalization_data = thread_data.get("personalization_data", {})
+            questions = personalization_data.get("explicit_questions", [])
+            
+            # Also check for implicit needs that might benefit from FAQ answers
+            implicit_needs = personalization_data.get("implicit_needs", [])
+            
+            logger.info(f"Found {len(questions)} explicit questions and {len(implicit_needs)} implicit needs")
+        except Exception as e:
+            logger.error(f"Error parsing thread analysis for parallel workflow: {e}")
             questions = []
+            implicit_needs = []
 
         # Get FAQ answers
         faq_answers = []
-        if questions:
+        all_queries = questions + implicit_needs
+        if all_queries:
             yield {
                 "type": "step_started",
                 "step": "faq_processing",
-                "message": f"Processing {len(questions)} FAQ questions...",
+                "message": f"Processing {len(all_queries)} FAQ queries...",
             }
 
             # Process FAQ questions in parallel too
             async def process_faq_parallel():
                 faq_tasks = []
-                for q in questions:
+                for q in all_queries:
 
-                    async def faq_task(question):
-                        answer = get_faq_answer(question)
-                        return {"question": question, "answer": answer}
+                    async def faq_task(query):
+                        answer = get_faq_answer(query)
+                        # Only include if we found a meaningful answer
+                        if answer and "couldn't find a specific answer" not in answer:
+                            return {"question": query, "answer": answer}
+                        return None
 
                     faq_tasks.append(faq_task(q))
 
-                return await asyncio.gather(*faq_tasks)
+                results = await asyncio.gather(*faq_tasks)
+                # Filter out None results
+                return [r for r in results if r is not None]
 
             faq_answers = await process_faq_parallel()
 
@@ -1144,6 +1167,8 @@ async def run_workflow_parallel_streaming(
                     "question": faq["question"],
                     "answer": faq["answer"],
                 }
+                
+            logger.info(f"Successfully retrieved {len(faq_answers)} FAQ answers")
 
         context = assemble_context(
             profile_summary,
@@ -1305,23 +1330,37 @@ async def run_workflow_streaming(
         # Parse thread analysis for questions
         try:
             thread_data = json.loads(thread_analysis)
-            questions = thread_data.get("explicit_questions", [])
-        except Exception:
+            # Get questions from the correct location in the JSON structure
+            personalization_data = thread_data.get("personalization_data", {})
+            questions = personalization_data.get("explicit_questions", [])
+            
+            # Also check for implicit needs that might benefit from FAQ answers
+            implicit_needs = personalization_data.get("implicit_needs", [])
+            
+            logger.info(f"Found {len(questions)} explicit questions and {len(implicit_needs)} implicit needs")
+        except Exception as e:
+            logger.error(f"Error parsing thread analysis for streaming workflow: {e}")
             questions = []
+            implicit_needs = []
 
         # Get FAQ answers
         faq_answers = []
-        if questions:
+        all_queries = questions + implicit_needs
+        if all_queries:
             yield {
                 "type": "step_started",
                 "step": "faq_processing",
-                "message": f"Processing {len(questions)} FAQ questions...",
+                "message": f"Processing {len(all_queries)} FAQ queries...",
             }
 
-            for q in questions:
+            for q in all_queries:
                 answer = get_faq_answer(q)
-                faq_answers.append({"question": q, "answer": answer})
-                yield {"type": "faq_answer_processed", "question": q, "answer": answer}
+                # Only include if we found a meaningful answer
+                if answer and "couldn't find a specific answer" not in answer:
+                    faq_answers.append({"question": q, "answer": answer})
+                    yield {"type": "faq_answer_processed", "question": q, "answer": answer}
+                    
+            logger.info(f"Successfully retrieved {len(faq_answers)} FAQ answers")
 
         context = assemble_context(
             profile_summary,
@@ -1438,15 +1477,29 @@ def run_workflow(
         # Parse thread analysis for questions
         try:
             thread_data = json.loads(thread_analysis)
-            questions = thread_data.get("explicit_questions", [])
-        except Exception:
+            # Get questions from the correct location in the JSON structure
+            personalization_data = thread_data.get("personalization_data", {})
+            questions = personalization_data.get("explicit_questions", [])
+            
+            # Also check for implicit needs that might benefit from FAQ answers
+            implicit_needs = personalization_data.get("implicit_needs", [])
+            
+            logger.info(f"Found {len(questions)} explicit questions and {len(implicit_needs)} implicit needs")
+        except Exception as e:
+            logger.error(f"Error parsing thread analysis for sync workflow: {e}")
             questions = []
+            implicit_needs = []
 
         # Get FAQ answers
         faq_answers = []
-        for q in questions:
+        all_queries = questions + implicit_needs
+        for q in all_queries:
             answer = get_faq_answer(q)
-            faq_answers.append({"question": q, "answer": answer})
+            # Only include if we found a meaningful answer
+            if answer and "couldn't find a specific answer" not in answer:
+                faq_answers.append({"question": q, "answer": answer})
+                
+        logger.info(f"Successfully retrieved {len(faq_answers)} FAQ answers from {len(all_queries)} queries")
 
         context = assemble_context(
             profile_summary,

@@ -482,5 +482,181 @@
       "predicted_response_rate": 0.35
     },
     "duration": 44.538004
+  },
+  {
+    "workflow_id": "linkedin-workflow",
+    "workflow_name": "LinkedIn Outreach Workflow",
+    "status": "completed",
+    "input_data": {
+      "conversation_thread": "Hi, I saw your product and Im interested. Can you tell me more?",
+      "channel": "linkedin",
+      "prospect_profile_url": "https://www.linkedin.com/in/evaluation-test/",
+      "prospect_company_url": "https://www.linkedin.com/company/eval-test-co/",
+      "prospect_company_website": "https://eval-test.com",
+      "qubit_context": "Testing real evaluation integration"
+    },
+    "steps": [
+      {
+        "name": "Profile Research",
+        "status": "completed",
+        "duration": 180,
+        "result": "Successfully analyzed profile and company data"
+      },
+      {
+        "name": "Message Generation",
+        "status": "completed",
+        "duration": 240,
+        "result": "Generated personalized message with 85% quality score"
+      },
+      {
+        "name": "Quality Review",
+        "status": "completed",
+        "duration": 120,
+        "result": "Message approved: Professional tone, clear value proposition"
+      }
+    ],
+    "current_step": "Completed",
+    "progress": 100,
+    "id": "exec_012",
+    "started_at": "2025-07-22T04:51:07.783191",
+    "completed_at": "2025-07-22T04:51:52.304635",
+    "output": {
+      "message": "Hi Evaluation,\n\nThanks for your quick reply\u2014and congratulations again on the EvalAI 2.0 launch and being named a Top 10 HR Solution Provider by HR Tech Outlook! It\u2019s clear Eval Test Co. is setting the pace for innovation in AI-powered talent assessment.\n\nI noticed your recent article on bridging product and customer success\u2014your emphasis on data-driven, customer-centric design really resonates with how we support high-growth SaaS teams post-Series A.\n\n**How We Help:**  \nWe specialize in enabling product leaders like yourself to scale platforms reliably while maintaining robust security and compliance\u2014especially critical with sensitive HR data. For example, we recently helped [Client Name], an AI-driven SaaS platform, improve platform reliability by 40% during their enterprise expansion, while ensuring seamless integrations with ATS/HRIS systems like Workday and Greenhouse.\n\n**Resource for You:**  \nI\u2019ve attached a short overview (raw URL: [your-product-overview-link]) highlighting how we address common challenges in scaling, bias mitigation, and analytics adoption.\n\n**Quick Question:**  \nOut of curiosity, are you currently prioritizing platform reliability, AI transparency, or something else as you scale EvalAI 2.0? I\u2019d love to tailor my insights to what matters most to your team.\n\nIf it\u2019s helpful, I\u2019m happy to set up a brief call or share a case study relevant to your current initiatives\u2014just let me know what works best for you.\n\nLooking forward to your thoughts!\n\nBest,  \n[Your Name]",
+      "quality_score": 85,
+      "predicted_response_rate": 0.35
+    },
+    "duration": 44.521444
+  },
+  {
+    "workflow_id": "linkedin-workflow",
+    "workflow_name": "LinkedIn Outreach Workflow",
+    "status": "completed",
+    "input_data": {
+      "conversation_thread": "Hi, I am interested in your product. How does it work?",
+      "channel": "linkedin",
+      "prospect_profile_url": "https://www.linkedin.com/in/test-eval-fix/",
+      "prospect_company_url": "https://www.linkedin.com/company/eval-fix-co/",
+      "prospect_company_website": "https://eval-fix.com",
+      "qubit_context": "Testing real evaluation with fix"
+    },
+    "steps": [
+      {
+        "name": "Profile Research",
+        "status": "completed",
+        "duration": 180,
+        "result": "Successfully analyzed profile and company data"
+      },
+      {
+        "name": "Message Generation",
+        "status": "completed",
+        "duration": 240,
+        "result": "Generated personalized message with 92% quality score"
+      },
+      {
+        "name": "Quality Review",
+        "status": "completed",
+        "duration": 120,
+        "result": "Message approved: Professional tone, clear value proposition"
+      }
+    ],
+    "current_step": "Completed",
+    "progress": 100,
+    "id": "exec_013",
+    "started_at": "2025-07-22T04:52:18.670627",
+    "completed_at": "2025-07-22T04:53:03.748903",
+    "output": {
+      "message": "Hi [Test Eval-Fix],\n\nThank you for reaching out and for your interest in how our solution works! I\u2019ve been following Eval-Fix\u2019s impressive momentum\u2014congratulations on your recent Series A and the launch of the Eval-Fix AI Suite. It\u2019s clear you\u2019re setting a new standard in automated QA.\n\n**How Our Solution Works (in a nutshell):**  \nWe provide an AI-driven platform that automatically evaluates code, detects bugs in real time, and suggests fixes\u2014all seamlessly integrated into your existing CI/CD workflows (e.g., GitHub, GitLab, Jira, Slack). Most teams see up to a 50% reduction in QA cycles and a significant boost in developer productivity, without sacrificing code quality.\n\n**Why It Matters for Teams Like Yours:**  \n- **Accelerates time-to-market** for new features/releases  \n- **Reduces manual QA overhead** and costs  \n- **Delivers actionable insights** for continuous improvement  \n- **Integrates easily** with modern stacks (Python, Node.js, React, AWS)\n\nI\u2019d love to understand your current QA workflow and any specific challenges you\u2019re looking to solve\u2014are you focused more on scaling enterprise adoption, reducing cycle times, or something else?\n\nIf helpful, I can share a quick one-pager or set up a 15-minute call to walk through a live demo tailored to Eval-Fix\u2019s needs. Let me know what works best for you!\n\nLooking forward to your thoughts.\n\nBest regards,  \n[Your Name]  \n[Your Title/Company]  \n[Contact Info]",
+      "quality_score": 92,
+      "predicted_response_rate": 0.48
+    },
+    "duration": 45.078276
+  },
+  {
+    "workflow_id": "linkedin-workflow",
+    "workflow_name": "LinkedIn Outreach Workflow",
+    "status": "completed",
+    "input_data": {
+      "conversation_thread": "Hi, interested in learning more",
+      "channel": "linkedin",
+      "prospect_profile_url": "https://www.linkedin.com/in/real-test/",
+      "prospect_company_url": "https://www.linkedin.com/company/test/",
+      "prospect_company_website": "https://test.com",
+      "qubit_context": "Test scores"
+    },
+    "steps": [
+      {
+        "name": "Profile Research",
+        "status": "completed",
+        "duration": 180,
+        "result": "Successfully analyzed profile and company data"
+      },
+      {
+        "name": "Message Generation",
+        "status": "completed",
+        "duration": 240,
+        "result": "Generated personalized message with 61% quality score"
+      },
+      {
+        "name": "Quality Review",
+        "status": "completed",
+        "duration": 120,
+        "result": "Message approved: Professional tone, clear value proposition"
+      }
+    ],
+    "current_step": "Completed",
+    "progress": 100,
+    "id": "exec_014",
+    "started_at": "2025-07-22T04:55:42.211002",
+    "completed_at": "2025-07-22T04:56:27.297384",
+    "output": {
+      "message": "Hi [Prospect Name],\n\nThanks so much for your quick reply and interest!\n\nI\u2019ve taken some time to learn about [Company] and noticed your recent [post/announcement/achievement, e.g., \u201cdigital transformation initiative\u201d or \u201cSeries B funding\u201d]. It\u2019s clear you\u2019re focused on driving innovation and scaling impact\u2014congrats on the momentum!\n\n**How We Can Help:**  \nWe specialize in helping companies like [Company] [insert value proposition, e.g., \u201cstreamline onboarding and accelerate go-to-market with minimal disruption\u201d]. For example, [Client A], a leader in [prospect\u2019s industry], reduced their onboarding time by 30% using our platform ([link to case study or testimonial]).\n\n**Resource for You:**  \nHere\u2019s a quick one-pager that outlines how our solution addresses common challenges in [industry/role]:  \n[raw URL to overview or explainer video]\n\n**Curious to Learn:**  \nTo make this most relevant, could you share which areas are top priorities for you right now\u2014[examples: scaling, compliance, integration, customer experience]? Or is there a specific challenge you\u2019re looking to solve?\n\nIf it\u2019s helpful, I\u2019d be happy to set up a brief call to dive deeper and share actionable insights from similar projects.\n\nLooking forward to your thoughts!\n\nBest regards,  \n[Your Name]",
+      "quality_score": 61,
+      "predicted_response_rate": 0.12
+    },
+    "duration": 45.086382
+  },
+  {
+    "workflow_id": "linkedin-workflow",
+    "workflow_name": "LinkedIn Outreach Workflow",
+    "status": "completed",
+    "input_data": {
+      "conversation_thread": "What is your success rate? How much equity I have to dilute if I have to get any investor?",
+      "channel": "linkedin",
+      "prospect_profile_url": "https://www.linkedin.com/in/test-kb/",
+      "prospect_company_url": "https://www.linkedin.com/company/test-kb-co/",
+      "prospect_company_website": "https://test-kb.com",
+      "qubit_context": "Testing knowledge base"
+    },
+    "steps": [
+      {
+        "name": "Profile Research",
+        "status": "completed",
+        "duration": 180,
+        "result": "Successfully analyzed profile and company data"
+      },
+      {
+        "name": "Message Generation",
+        "status": "completed",
+        "duration": 240,
+        "result": "Generated personalized message with 88% quality score"
+      },
+      {
+        "name": "Quality Review",
+        "status": "completed",
+        "duration": 120,
+        "result": "Message approved: Professional tone, clear value proposition"
+      }
+    ],
+    "current_step": "Completed",
+    "progress": 100,
+    "id": "exec_015",
+    "started_at": "2025-07-22T05:04:17.013134",
+    "completed_at": "2025-07-22T05:05:03.804639",
+    "output": {
+      "message": "Certainly! Below is a comprehensive LinkedIn response strategy tailored for Test KB (Head of Product, Test-KB Co.), based on your intelligence report and the recent conversation thread.\n\n---\n\n# LINKEDIN RESPONSE STRATEGY\n\n---\n\n## FULL CONVERSATION THREAD (FOR CONTEXT)\n\n**You:**  \nHi Test, I came across your recent post on scaling from MVP to 10k users\u2014impressive journey! I work with SaaS leaders like yourself to accelerate onboarding and knowledge sharing as teams grow. Curious: what\u2019s been your biggest challenge in maintaining product velocity during this rapid scale?\n\n**Test KB:**  \nWhat is your success rate?  \nHow much equity I have to dilute if I have to get any investor?\n\n---\n\n## IMMEDIATE RESPONSE\n\n**Subject/Theme:** Transparent Answers & Founder-Friendly Approach\n\n---\n\n**Hi Test,**\n\nThanks for your direct questions\u2014love your analytical approach, and congrats again on the Series A and the SmartSearch launch at Test-KB Co. That\u2019s a huge milestone!\n\n**On Success Rate:**  \nWe\u2019ve partnered with SaaS teams at a similar stage to Test-KB Co., helping over 80% achieve their onboarding and knowledge retention goals within the first year. For example, [SaaS Client X](raw-url-to-case-study) reduced onboarding time by 35% and saw a 25% boost in internal knowledge usage after integrating our solution. Happy to share more details or connect you with a peer founder for firsthand insights.\n\n**On Equity Dilution:**  \nEquity terms are always tailored, but we\u2019re founder-friendly\u2014our typical range is 10-18% for a Series A, with flexibility based on valuation, growth trajectory, and strategic fit. We\u2019re transparent about all terms up front and can walk you through scenarios to minimize dilution while maximizing value.\n\nGiven your focus on product-led growth and user-centric design, I believe our approach could support your next phase without compromising control.\n\n**Would you be open to a quick call next week to dive deeper into success metrics and discuss how we structure investments to protect founders\u2019 interests?**  \nAlternatively, I can send over a one-pager with detailed case studies and sample term sheets if that\u2019s easier.\n\nLooking forward to your thoughts!\n\nBest,  \n[Your Name]\n\n---\n\n## FOLLOW-UP SEQUENCE\n\n### **Follow-Up 1 (2-3 days later)**\n\n**Subject/Theme:** Social Proof & Value Alignment\n\n---\n\nHi Test,\n\nJust wanted to follow up and share a quick resource: here\u2019s a [one-pager with success stories](raw-url-to-one-pager) from SaaS companies that faced similar scaling and onboarding challenges as Test-KB Co.\n\nI also noticed we both know [Mutual Connection]\u2014they\u2019ve spoken highly of your leadership in product-led growth. If helpful, I can arrange an intro to a founder who recently navigated the same equity questions you raised.\n\n**Quick question:**  \nAs you look ahead to expanding into the enterprise segment (congrats on the EU market plans!), what\u2019s top of mind for you when evaluating new partners or solutions?\n\nHappy to tailor my insights to what matters most for your team.\n\nBest,  \n[Your Name]\n\n---\n\n### **Follow-Up 2 (5-7 days after previous message)**\n\n**Subject/Theme:** Industry Trends & Low-Commitment Next Step\n\n---\n\nHi Test,\n\nWanted to share a recent [industry article](raw-url-to-industry-article) on AI-driven knowledge management and its impact on SaaS onboarding\u2014thought it might resonate given your recent post on leveraging AI for user engagement.\n\nIf you\u2019re still exploring options, I\u2019d be glad to offer a brief, no-strings-attached walkthrough of how our platform integrates with tools like Slack and Salesforce (I saw those are core to your stack). Even if now\u2019s not the right time, happy to be a resource as you continue scaling.\n\nWould you like me to send over a sample integration map or set up a quick demo?\n\nAppreciate your time and transparency!\n\nBest,  \n[Your Name]\n\n---\n\n## PERSONALIZATION ELEMENTS\n\n- **Recent Posts/Achievements:** Reference Test\u2019s LinkedIn post on scaling from MVP to 10k users; congratulate on Series A and SmartSearch launch.\n- **Mutual Connections:** Mention shared connections in SaaS/product management circles (e.g., [Mutual Connection]).\n- **Industry Language:** Use terms like \u201conboarding,\u201d \u201cknowledge retention,\u201d \u201cproduct-led growth,\u201d \u201cAI-driven features.\u201d\n- **Role-Specific:** Address Test\u2019s responsibilities as Head of Product\u2014focus on scaling, integration, and user experience.\n- **Company Priorities:** Tie messaging to Test-KB Co.\u2019s goals: rapid deployment, seamless integrations, reducing onboarding friction, and differentiating in a crowded market.\n\n---\n\n## VALUE PROPOSITIONS\n\n- **Direct Pain Points:**  \n  - Minimize equity dilution with flexible, founder-friendly terms.\n  - Proven track record: 80%+ success rate with similar SaaS companies.\n  - Rapid deployment and seamless integration with existing tools (Slack, Salesforce).\n  - Demonstrated ROI: reduced onboarding time, improved knowledge retention.\n- **Social Proof:** Share case studies ([raw-url-to-case-study]) and offer peer founder connections.\n- **Unique Fit:** Highlight alignment with Test\u2019s values (user-centric design, transparency).\n\n---\n\n## ENGAGEMENT TACTICS\n\n- **Open-Ended Questions:**  \n  - \u201cWhat\u2019s top of mind as you evaluate new partners?\u201d\n  - \u201cHow are you tackling onboarding challenges at this scale?\u201d\n- **Industry Insights:** Share relevant articles ([raw-url-to-industry-article]) or whitepapers.\n- **Valuable Resources:** Offer one-pagers, case studies, or introductions.\n- **Low-Commitment Next Steps:** Suggest a brief call or send additional materials\u2014let them choose.\n- **Curiosity Gaps:** Tease unique approaches (\u201cHappy to walk you through how we\u2019ve helped founders retain more ownership while accelerating growth\u201d).\n\n---\n\n## SUMMARY CHECKLIST\n\n- [x] Personalized acknowledgment of their achievements and questions\n- [x] Clear, data-backed answers (success rate, equity dilution)\n- [x] Immediate value (case study/resource)\n- [x] Open-ended CTA (call or resource)\n- [x] Follow-ups build value and credibility\n- [x] Social proof and industry alignment\n- [x] Professional yet personable tone throughout\n\n---\n\n**This strategy maximizes engagement by combining transparency, social proof, and tailored value\u2014moving the conversation naturally toward a business discussion while respecting the prospect\u2019s priorities and communication style.**",
+      "quality_score": 88,
+      "predicted_response_rate": 0.46
+    },
+    "duration": 46.791505
   }
 ]

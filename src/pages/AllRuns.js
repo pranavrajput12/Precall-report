@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Clock,
@@ -8,7 +8,6 @@ import {
   Copy,
   ChevronDown,
   ChevronUp,
-  Filter,
   Download,
   RefreshCw,
   MessageSquare,
@@ -36,8 +35,15 @@ const AllRuns = () => {
     refetchInterval: 30000 // Refresh every 30 seconds
   });
 
+  // Sort runs by date (newest first) and then filter
+  const sortedRuns = [...runs].sort((a, b) => {
+    const dateA = new Date(a.started_at);
+    const dateB = new Date(b.started_at);
+    return dateB - dateA; // Newest first
+  });
+
   // Filter runs based on status and search term
-  const filteredRuns = runs.filter(run => {
+  const filteredRuns = sortedRuns.filter(run => {
     const matchesStatus = filterStatus === 'all' || run.status === filterStatus;
     const matchesSearch = searchTerm === '' || 
       run.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -147,6 +153,9 @@ const AllRuns = () => {
             <div>
               <p className="text-sm text-gray-600">Total Runs</p>
               <p className="text-2xl font-bold text-gray-900">{runs.length}</p>
+              {sortedRuns.length > 0 && (
+                <p className="text-xs text-gray-500 mt-1">Latest: {sortedRuns[0].id}</p>
+              )}
             </div>
             <Calendar className="w-8 h-8 text-blue-500" />
           </div>
