@@ -658,5 +658,49 @@
       "predicted_response_rate": 0.46
     },
     "duration": 46.791505
+  },
+  {
+    "workflow_id": "linkedin-workflow",
+    "workflow_name": "LinkedIn Outreach Workflow",
+    "status": "completed",
+    "input_data": {
+      "conversation_thread": "Hi John, I saw your company just raised Series A funding. Congratulations\\! I noticed you are scaling rapidly and might face challenges with investor relations. Would love to chat about how we can help.",
+      "channel": "linkedin",
+      "prospect_profile_url": "https://linkedin.com/in/john-doe",
+      "prospect_company_url": "https://linkedin.com/company/test-startup",
+      "prospect_company_website": "https://test-startup.com",
+      "qubit_context": "We help startups with fundraising"
+    },
+    "steps": [
+      {
+        "name": "Profile Research",
+        "status": "completed",
+        "duration": 180,
+        "result": "Successfully analyzed profile and company data"
+      },
+      {
+        "name": "Message Generation",
+        "status": "completed",
+        "duration": 240,
+        "result": "Generated personalized message with 74% quality score"
+      },
+      {
+        "name": "Quality Review",
+        "status": "completed",
+        "duration": 120,
+        "result": "Message approved: Professional tone, clear value proposition"
+      }
+    ],
+    "current_step": "Completed",
+    "progress": 100,
+    "id": "exec_016",
+    "started_at": "2025-07-22T05:13:32.613035",
+    "completed_at": "2025-07-22T05:14:24.832955",
+    "output": {
+      "message": "Hi John,\n\nCongratulations again on Test Startup\u2019s Series B and the G2 \u201cTop 50 Workflow Tools\u201d recognition\u2014those are huge milestones! I also enjoyed your recent post on leveraging AI for user retention; your perspective on combining data-driven insights with customer-centric design is spot-on.\n\nI noticed Test Startup is rapidly scaling and preparing for European expansion. Having worked with several SaaS companies post-Series B, I understand how managing investor relations and maintaining transparent communication can become both more complex and more critical during this phase.\n\nTo provide immediate value, here\u2019s a concise one-pager outlining common investor relations pitfalls for high-growth SaaS companies and actionable steps to avoid them: [Insert One-Pager Link].  \nAdditionally, if it\u2019s helpful, I\u2019m happy to introduce you to a founder who recently navigated a similar expansion\u2014just let me know.\n\nWould you be open to a 15-minute call next week to discuss how we\u2019ve helped other teams like yours streamline investor updates and free up leadership bandwidth during rapid growth? No pressure if now isn\u2019t ideal\u2014happy to connect whenever it\u2019s most useful.\n\nWishing you continued success as you build out your product and team!\n\nBest regards,  \n[Your Name]  \n[Your Company]  \n[Raw LinkedIn Profile URL]",
+      "quality_score": 74,
+      "predicted_response_rate": 0.29
+    },
+    "duration": 52.21992
   }
 ]

@@ -34,6 +34,7 @@ from performance_optimization import performance_optimizer
 from tasks import run_workflow_task
 from workflow import (run_reply_generation_template, run_workflow,
                       run_workflow_parallel_streaming, run_workflow_streaming)
+from faq_agent import faq_agent
 from workflow_executor import workflow_executor
 from auth import auth_manager, get_current_user, require_auth, require_admin, authenticate_user, ENABLE_AUTH
 from agents import llm
@@ -1406,6 +1407,84 @@ async def import_faq(file: UploadFile = File(...)):
         return result
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=400)
+
+
+# FAQ Agent endpoints
+@app.post("/api/faq/intelligent-answer")
+@limiter.limit("10/minute")
+async def get_intelligent_faq_answer(request: Request):
+    """Get intelligent FAQ answer using the FAQ agent"""
+    data = await request.json()
+    question = data.get("question", "")
+    context = data.get("context", {})
+    
+    if not question:
+        raise HTTPException(status_code=400, detail="Question is required")
+    
+    try:
+        result = faq_agent.get_intelligent_answer(question, context)
+        return JSONResponse(result)
+    except Exception as e:
+        logger.error(f"Error getting intelligent FAQ answer: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/faq/analyze-questions")
+@limiter.limit("5/minute")
+async def analyze_questions(request: Request):
+    """Analyze multiple questions and get intelligent answers"""
+    data = await request.json()
+    questions = data.get("questions", [])
+    context = data.get("context", {})
+    
+    if not questions:
+        raise HTTPException(status_code=400, detail="Questions array is required")
+    
+    try:
+        from faq_agent import analyze_questions_batch
+        results = analyze_questions_batch(questions, context)
+        return JSONResponse({"results": results})
+    except Exception as e:
+        logger.error(f"Error analyzing questions: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/faq/suggest-new")
+@limiter.limit("2/minute")
+async def suggest_new_faqs(request: Request):
+    """Suggest new FAQ entries based on unanswered questions"""
+    data = await request.json()
+    unanswered_questions = data.get("unanswered_questions", [])
+    
+    if not unanswered_questions:
+        raise HTTPException(status_code=400, detail="Unanswered questions array is required")
+    
+    try:
+        suggestions = faq_agent.suggest_new_faqs(unanswered_questions)
+        return JSONResponse({"suggestions": suggestions})
+    except Exception as e:
+        logger.error(f"Error suggesting new FAQs: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/faq/evaluate-answer")
+@limiter.limit("5/minute")
+async def evaluate_faq_answer(request: Request):
+    """Evaluate the quality of an FAQ answer"""
+    data = await request.json()
+    question = data.get("question", "")
+    answer = data.get("answer", "")
+    feedback = data.get("feedback", None)
+    
+    if not question or not answer:
+        raise HTTPException(status_code=400, detail="Question and answer are required")
+    
+    try:
+        evaluation = faq_agent.evaluate_answer_quality(question, answer, feedback)
+        return JSONResponse(evaluation)
+    except Exception as e:
+        logger.error(f"Error evaluating FAQ answer: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":

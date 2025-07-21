@@ -9,6 +9,7 @@ from agents import llm  # Import the working LLM directly
 from cache import (async_cache_result, cache_result, metrics_collector,
                    workflow_cache)
 from faq import get_faq_answer
+from faq_agent import get_intelligent_faq_answer, analyze_questions_batch
 from output_quality import assess_workflow_output_quality
 
 # Set up logging
@@ -1147,9 +1148,13 @@ async def run_workflow_parallel_streaming(
                 for q in all_queries:
 
                     async def faq_task(query):
-                        answer = get_faq_answer(query)
+                        # Use intelligent FAQ agent for better answers
+                        answer = get_intelligent_faq_answer(query, {
+                            "thread_analysis": thread_data,
+                            "channel": norm_channel
+                        })
                         # Only include if we found a meaningful answer
-                        if answer and "couldn't find a specific answer" not in answer:
+                        if answer and "don't have specific information" not in answer:
                             return {"question": query, "answer": answer}
                         return None
 
@@ -1354,9 +1359,13 @@ async def run_workflow_streaming(
             }
 
             for q in all_queries:
-                answer = get_faq_answer(q)
+                # Use intelligent FAQ agent for better answers
+                answer = get_intelligent_faq_answer(q, {
+                    "thread_analysis": thread_data,
+                    "channel": norm_channel
+                })
                 # Only include if we found a meaningful answer
-                if answer and "couldn't find a specific answer" not in answer:
+                if answer and "don't have specific information" not in answer:
                     faq_answers.append({"question": q, "answer": answer})
                     yield {"type": "faq_answer_processed", "question": q, "answer": answer}
                     
@@ -1493,11 +1502,19 @@ def run_workflow(
         # Get FAQ answers
         faq_answers = []
         all_queries = questions + implicit_needs
-        for q in all_queries:
-            answer = get_faq_answer(q)
-            # Only include if we found a meaningful answer
-            if answer and "couldn't find a specific answer" not in answer:
-                faq_answers.append({"question": q, "answer": answer})
+        # Use batch analysis for better performance in sync mode
+        if all_queries:
+            batch_results = analyze_questions_batch(all_queries, {
+                "thread_analysis": thread_data,
+                "channel": norm_channel
+            })
+            for result in batch_results:
+                if result['answer'] and "don't have specific information" not in result['answer']:
+                    faq_answers.append({
+                        "question": result['question'], 
+                        "answer": result['answer'],
+                        "confidence": result.get('confidence', 0.5)
+                    })
                 
         logger.info(f"Successfully retrieved {len(faq_answers)} FAQ answers from {len(all_queries)} queries")
 
