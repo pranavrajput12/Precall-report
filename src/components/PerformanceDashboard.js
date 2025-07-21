@@ -21,19 +21,19 @@ import { RefreshCw, Activity, Clock, CheckCircle, AlertCircle } from 'lucide-rea
 import toast from 'react-hot-toast';
 
 const fetchPerformanceMetrics = async () => {
-  const response = await fetch('http://localhost:8090/api/performance/metrics');
+  const response = await fetch('/api/performance/metrics');
   if (!response.ok) throw new Error('Failed to fetch performance metrics');
   return response.json();
 };
 
 const fetchAgentPerformance = async () => {
-  const response = await fetch('http://localhost:8090/api/performance/agents');
+  const response = await fetch('/api/performance/agents');
   if (!response.ok) throw new Error('Failed to fetch agent performance');
   return response.json();
 };
 
 const fetchSystemPerformance = async () => {
-  const response = await fetch('http://localhost:8090/api/performance/system');
+  const response = await fetch('/api/performance/system');
   if (!response.ok) throw new Error('Failed to fetch system performance');
   return response.json();
 };

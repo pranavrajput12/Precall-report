@@ -2,12 +2,18 @@ import asyncio
 import json
 import os
 import time
+import logging
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 import sentry_sdk
 import uvicorn
 from celery.result import AsyncResult
-from fastapi import (FastAPI, File, Query, Request, UploadFile, WebSocket, WebSocketDisconnect)
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+from fastapi import (FastAPI, File, Query, Request, UploadFile, WebSocket, WebSocketDisconnect, Depends, HTTPException, status)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -19,6 +25,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
 from config_api import config_app
+from config_manager import config_manager
 # Import enhanced systems
 from evaluation_system import evaluation_system
 from observability import observability_manager
@@ -27,6 +34,8 @@ from tasks import run_workflow_task
 from workflow import (run_reply_generation_template, run_workflow,
                       run_workflow_parallel_streaming, run_workflow_streaming)
 from workflow_executor import workflow_executor
+from auth import auth_manager, get_current_user, require_auth, require_admin, authenticate_user, ENABLE_AUTH
+from agents import llm
 
 # Add this near the top of the file, after the imports
 import json
@@ -102,12 +111,18 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Enhanced CORS middleware
+# Get allowed origins from environment variable
+allowed_origins = os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8100").split(",")
+allowed_origins = [origin.strip() for origin in allowed_origins]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=3600,
 )
 
 # Instrument FastAPI with observability
@@ -120,13 +135,79 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 app.mount("/api/config", config_app)
 
 
+# Authentication endpoints
+class LoginRequest(BaseModel):
+    username: str = Field(..., description="Username")
+    password: str = Field(..., description="Password")
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: Dict[str, Any]
+
+
+@app.post("/api/auth/login", response_model=TokenResponse)
+async def login(request: LoginRequest):
+    """Login endpoint to get JWT token"""
+    user = authenticate_user(request.username, request.password)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid username or password",
+        )
+    
+    # Create token
+    token_data = {
+        "sub": user["id"],
+        "username": user["username"],
+        "role": user["role"],
+        "email": user.get("email", "")
+    }
+    access_token = auth_manager.create_access_token(token_data)
+    
+    return TokenResponse(
+        access_token=access_token,
+        user=user
+    )
+
+
+@app.get("/api/auth/me")
+async def get_me(current_user: Dict[str, Any] = Depends(get_current_user)):
+    """Get current user information"""
+    return current_user
+
+
+@app.get("/api/auth/status")
+async def auth_status():
+    """Get authentication status"""
+    return {
+        "auth_enabled": ENABLE_AUTH,
+        "auth_type": "jwt",
+        "features": {
+            "login": True,
+            "logout": True,
+            "refresh": False,
+            "register": False
+        }
+    }
+
+
 # New workflow execution endpoint using configuration
 @app.post("/api/workflow/execute")
-async def execute_workflow_with_config(request: Request, data: dict):
+async def execute_workflow_with_config(
+    request: Request, 
+    data: dict,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
     """Execute workflow using current configuration"""
     try:
         workflow_id = data.get("workflow_id", "default_workflow")
         input_data = data.get("input_data", {})
+        
+        # Add user info to input data for audit trail
+        input_data["_executed_by"] = current_user.get("username", "unknown")
+        input_data["_executed_at"] = datetime.now().isoformat()
 
         result = await workflow_executor.run_full_workflow(workflow_id, input_data)
         return JSONResponse(result)
@@ -227,18 +308,48 @@ manager = ConnectionManager()
 # Pydantic models for request validation
 class WorkflowRequest(BaseModel):
     conversation_thread: str = Field(
-        ..., description="The conversation thread to analyze"
+        ..., 
+        description="The conversation thread to analyze",
+        min_length=1,
+        max_length=50000
     )
-    channel: str = Field(...,
-                         description="Communication channel (linkedin/email)")
+    channel: str = Field(
+        ...,
+        description="Communication channel (linkedin/email)",
+        pattern="^(linkedin|email)$"
+    )
     prospect_profile_url: str = Field(
-        ..., description="LinkedIn profile URL of the prospect"
+        ..., 
+        description="LinkedIn profile URL of the prospect",
+        pattern="^https?://(www\\.)?linkedin\\.com/in/[\\w-]+/?\\s*$"
     )
-    prospect_company_url: str = Field(..., description="Company LinkedIn URL")
-    prospect_company_website: str = Field(...,
-                                          description="Company website URL")
+    prospect_company_url: str = Field(
+        ..., 
+        description="Company LinkedIn URL",
+        pattern="^https?://(www\\.)?linkedin\\.com/company/[\\w-]+/?\\s*$"
+    )
+    prospect_company_website: str = Field(
+        ...,
+        description="Company website URL",
+        pattern="^https?://[\\w.-]+\\.[\\w.-]+.*$"
+    )
     qubit_context: str = Field(
-        "", description="Additional context for the workflow")
+        "", 
+        description="Additional context for the workflow",
+        max_length=5000
+    )
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "conversation_thread": "Hi, I'm interested in learning more about your product...",
+                "channel": "linkedin",
+                "prospect_profile_url": "https://linkedin.com/in/john-doe",
+                "prospect_company_url": "https://linkedin.com/company/acme-corp",
+                "prospect_company_website": "https://acme-corp.com",
+                "qubit_context": "Focus on enterprise features"
+            }
+        }
 
 
 class WorkflowFilters(BaseModel):
@@ -255,10 +366,39 @@ class WorkflowFilters(BaseModel):
 
 class BatchWorkflowRequest(BaseModel):
     requests: List[WorkflowRequest] = Field(
-        ..., description="List of workflow requests to process"
+        ..., 
+        description="List of workflow requests to process",
+        min_items=1,
+        max_items=50
     )
-    parallel: bool = Field(True, description="Process requests in parallel")
-    max_concurrent: int = Field(10, description="Maximum concurrent requests")
+    parallel: bool = Field(
+        True, 
+        description="Process requests in parallel"
+    )
+    max_concurrent: int = Field(
+        10, 
+        description="Maximum concurrent requests",
+        ge=1,
+        le=50
+    )
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "requests": [
+                    {
+                        "conversation_thread": "Hi, interested in your services...",
+                        "channel": "linkedin",
+                        "prospect_profile_url": "https://linkedin.com/in/john-doe",
+                        "prospect_company_url": "https://linkedin.com/company/acme",
+                        "prospect_company_website": "https://acme.com",
+                        "qubit_context": ""
+                    }
+                ],
+                "parallel": True,
+                "max_concurrent": 10
+            }
+        }
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -385,7 +525,6 @@ async def run(
             })
             
             # Simulate step progression
-            import asyncio
             await asyncio.sleep(1)
             update_execution_record(execution_id, {
                 "current_step": "Message Generation", 
@@ -398,8 +537,10 @@ async def run(
                 "progress": 85
             })
             
-            # Run actual workflow
+            # Run actual workflow with logging
+            logger.info(f"Calling run_workflow with input_data: {input_data}")
             result = run_workflow(**input_data)
+            logger.info(f"run_workflow returned: {result}")
             
             # Extract just the message content from the reply
             reply_content = result.get("reply", "")
@@ -475,6 +616,9 @@ async def run(
             
     except Exception as e:
         # Update execution with error
+        logger.error(f"Error in /run endpoint: {str(e)}", exc_info=True)
+        import traceback
+        logger.error(f"Full traceback: {traceback.format_exc()}")
         update_execution_record(execution_id, {
             "status": "failed",
             "completed_at": datetime.now().isoformat(),
@@ -782,6 +926,16 @@ async def health_check():
             manager.active_connections)}
 
 
+@app.get("/test")
+async def test():
+    """Test endpoint to debug issues"""
+    return {
+        "status": "ok",
+        "llm_status": llm is not None,
+        "llm_type": type(llm).__name__ if llm is not None else "None"
+    }
+
+
 @app.get("/metrics")
 async def get_metrics():
     """Get application metrics"""
@@ -809,7 +963,7 @@ async def get_cache_stats():
 @app.get("/api/execution-history")
 async def get_execution_history():
     """Get workflow execution history"""
-    return execution_history
+    return {"executions": execution_history}
 
 @app.post("/api/demo-execution")
 async def create_demo_execution():
@@ -1032,16 +1186,19 @@ async def get_test_results():
             ]
         })
     
-    return test_results
+    return {"test_results": test_results}
 
 
 @app.post("/cache/clear")
-async def clear_cache(pattern: str = "*"):
-    """Clear cache entries matching pattern"""
+async def clear_cache(
+    pattern: str = "*",
+    current_user: Dict[str, Any] = Depends(require_admin)
+):
+    """Clear cache entries matching pattern (Admin only)"""
     from cache import cache_manager
 
     cleared = cache_manager.flush_pattern(pattern)
-    return {"cleared_keys": cleared, "pattern": pattern}
+    return {"cleared_keys": cleared, "pattern": pattern, "cleared_by": current_user.get("username")}
 
 
 # FAQ Management Endpoints
@@ -1052,20 +1209,50 @@ async def get_all_faqs():
     return get_all_faq_topics()
 
 
+class FAQCreateRequest(BaseModel):
+    question: str = Field(
+        ...,
+        description="The FAQ question",
+        min_length=5,
+        max_length=500
+    )
+    answer: str = Field(
+        ...,
+        description="The FAQ answer", 
+        min_length=10,
+        max_length=5000
+    )
+    category: str = Field(
+        ...,
+        description="FAQ category",
+        min_length=1,
+        max_length=100
+    )
+    keywords: str = Field(
+        "",
+        description="Comma-separated keywords",
+        max_length=500
+    )
+
+
 @app.post("/api/faq")
-async def create_faq(data: dict):
+async def create_faq(
+    request: FAQCreateRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
     """Create new FAQ entry"""
     from faq import add_faq_item
     
     try:
         result = add_faq_item(
-            question=data.get("question", ""),
-            answer=data.get("answer", ""),
-            category=data.get("category", ""),
-            keywords=data.get("keywords", "")
+            question=request.question,
+            answer=request.answer,
+            category=request.category,
+            keywords=request.keywords
         )
         return result
     except Exception as e:
+        logger.error(f"Error creating FAQ: {e}")
         return JSONResponse({"error": str(e)}, status_code=400)
 
 

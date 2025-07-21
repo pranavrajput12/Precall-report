@@ -54,7 +54,7 @@ class CacheManager:
             cached_value = self.redis_client.get(key)
             if cached_value:
                 return json.loads(cached_value)
-        except (redis.RedisError, json.JSONDecodeError):
+        except (redis.RedisError, json.JSONDecodeError) as e:
             logger.error(f"Cache get error: {e}")
 
         return None
@@ -67,7 +67,7 @@ class CacheManager:
         try:
             serialized_value = json.dumps(value, default=str)
             return self.redis_client.setex(key, ttl, serialized_value)
-        except (redis.RedisError, json.JSONEncodeError):
+        except (redis.RedisError, json.JSONEncodeError) as e:
             logger.error(f"Cache set error: {e}")
             return False
 
@@ -78,7 +78,7 @@ class CacheManager:
 
         try:
             return bool(self.redis_client.delete(key))
-        except redis.RedisError:
+        except redis.RedisError as e:
             logger.error(f"Cache delete error: {e}")
             return False
 
@@ -89,7 +89,7 @@ class CacheManager:
 
         try:
             return bool(self.redis_client.exists(key))
-        except redis.RedisError:
+        except redis.RedisError as e:
             logger.error(f"Cache exists error: {e}")
             return False
 
@@ -103,7 +103,7 @@ class CacheManager:
             if keys:
                 return self.redis_client.delete(*keys)
             return 0
-        except redis.RedisError:
+        except redis.RedisError as e:
             logger.error(f"Cache flush pattern error: {e}")
             return 0
 
@@ -133,7 +133,7 @@ class CacheManager:
                     0),
                 "hit_rate": self._calculate_hit_rate(info),
             }
-        except redis.RedisError:
+        except redis.RedisError as e:
             logger.error(f"Cache stats error: {e}")
             return {"status": "error", "error": str(e)}
 
@@ -472,17 +472,28 @@ class SmartWorkflowCache:
         self, profile_url: str, company_url: str, data: Dict, ttl: int = 7200
     ):
         """Cache profile enrichment data (2 hours TTL)"""
+        if self.redis is None:
+            return None
         key = f"profile:{hashlib.md5(f'{profile_url}:{company_url}'.encode()).hexdigest()}"
-        return self.redis.setex(key, ttl, json.dumps(data))
+        try:
+            return self.redis.setex(key, ttl, json.dumps(data))
+        except Exception as e:
+            self.logger.warning(f"Cache storage failed: {e}")
+            return None
 
     def get_cached_profile_data(
         self, profile_url: str, company_url: str
     ) -> Optional[Dict]:
         """Get cached profile enrichment data"""
+        if self.redis is None:
+            return None
         key = f"profile:{hashlib.md5(f'{profile_url}:{company_url}'.encode()).hexdigest()}"
-        cached_data = self.redis.get(key)
-        if cached_data:
-            return json.loads(cached_data)
+        try:
+            cached_data = self.redis.get(key)
+            if cached_data:
+                return json.loads(cached_data)
+        except Exception as e:
+            self.logger.warning(f"Cache retrieval failed: {e}")
         return None
 
     def cache_faq_answer(self, question: str, answer: str, ttl: int = 86400):

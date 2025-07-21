@@ -3,6 +3,8 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 import { scan } from 'react-scan';
+import ErrorBoundary from './components/ErrorBoundary';
+import { AsyncErrorBoundary } from './components/AsyncErrorBoundary';
 import AgentManager from './components/AgentManager';
 import PromptManager from './components/PromptManager';
 import WorkflowVisualization from './components/WorkflowVisualization';
@@ -19,6 +21,7 @@ import Settings from './components/Settings';
 import Sidebar from './components/Sidebar';
 import ExecutionHistory from './components/ExecutionHistory';
 import KnowledgeBase from './components/KnowledgeBase';
+import RunWorkflow from './pages/RunWorkflow';
 import './App.css';
 
 // Initialize React Scan for performance monitoring
@@ -123,41 +126,48 @@ function App() {
   }
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <Router 
-        future={{
-          v7_startTransition: true,
-          v7_relativeSplatPath: true
-        }}
-      >
-        <div className="flex">
-          <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} currentPage={currentPage} onPageChange={setCurrentPage} />
-          <div className="flex-1 min-h-screen bg-gray-50">
-            <Toaster position="top-right" />
-            <main className="p-6">
-              <Routes>
-                <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                <Route path="/dashboard" element={<InteractiveDashboard />} />
-                <Route path="/agents" element={<AgentManager selectedAgent={selectedAgent} onAgentSelect={setSelectedAgent} />} />
-                <Route path="/prompts" element={<PromptManager selectedPrompt={selectedPrompt} onPromptSelect={setSelectedPrompt} />} />
-                <Route path="/workflows" element={<WorkflowBuilder />} />
-                <Route path="/models" element={<ModelManagement />} />
-                <Route path="/model-assignments" element={<ModelAssignments />} />
-                <Route path="/performance" element={<PerformanceDashboard agents={agents} executionHistory={executionHistory} testResults={testResults} refreshInterval={5000} />} />
-                <Route path="/editor" element={<EnhancedPromptEditor />} />
-                <Route path="/observability" element={<ObservabilityDashboard />} />
-                <Route path="/evals" element={<EvaluationDashboard />} />
-                <Route path="/tools" element={<ToolManager />} />
-                <Route path="/settings" element={<Settings />} />
-                <Route path="/history" element={<ExecutionHistory />} />
-                <Route path="/knowledge-base" element={<KnowledgeBase />} />
-                {/* Add more routes as needed */}
-              </Routes>
-            </main>
-          </div>
-        </div>
-      </Router>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <AsyncErrorBoundary>
+          <Router 
+            future={{
+              v7_startTransition: true,
+              v7_relativeSplatPath: true
+            }}
+          >
+            <div className="flex">
+              <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} currentPage={currentPage} onPageChange={setCurrentPage} />
+              <div className="flex-1 min-h-screen bg-gray-50">
+                <Toaster position="top-right" />
+                <main className="p-6">
+                  <ErrorBoundary>
+                    <Routes>
+                      <Route path="/" element={<Navigate to="/run" replace />} />
+                      <Route path="/run" element={<RunWorkflow />} />
+                      <Route path="/dashboard" element={<InteractiveDashboard />} />
+                      <Route path="/agents" element={<AgentManager selectedAgent={selectedAgent} onAgentSelect={setSelectedAgent} />} />
+                      <Route path="/prompts" element={<PromptManager selectedPrompt={selectedPrompt} onPromptSelect={setSelectedPrompt} />} />
+                      <Route path="/workflows" element={<WorkflowBuilder />} />
+                      <Route path="/models" element={<ModelManagement />} />
+                      <Route path="/model-assignments" element={<ModelAssignments />} />
+                      <Route path="/performance" element={<PerformanceDashboard agents={agents} executionHistory={executionHistory} testResults={testResults} refreshInterval={5000} />} />
+                      <Route path="/editor" element={<EnhancedPromptEditor />} />
+                      <Route path="/observability" element={<ObservabilityDashboard />} />
+                      <Route path="/evals" element={<EvaluationDashboard />} />
+                      <Route path="/tools" element={<ToolManager />} />
+                      <Route path="/settings" element={<Settings />} />
+                      <Route path="/history" element={<ExecutionHistory />} />
+                      <Route path="/knowledge-base" element={<KnowledgeBase />} />
+                      {/* Add more routes as needed */}
+                    </Routes>
+                  </ErrorBoundary>
+                </main>
+              </div>
+            </div>
+          </Router>
+        </AsyncErrorBoundary>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
 

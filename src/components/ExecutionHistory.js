@@ -21,13 +21,15 @@ import toast from 'react-hot-toast';
 const fetchExecutionHistory = async () => {
   const response = await fetch('/api/execution-history');
   if (!response.ok) throw new Error('Failed to fetch execution history');
-  return response.json();
+  const data = await response.json();
+  return data.executions || [];
 };
 
 const fetchTestResults = async () => {
   const response = await fetch('/api/test-results');
   if (!response.ok) throw new Error('Failed to fetch test results');
-  return response.json();
+  const data = await response.json();
+  return data.test_results || [];
 };
 
 const ExecutionHistory = () => {

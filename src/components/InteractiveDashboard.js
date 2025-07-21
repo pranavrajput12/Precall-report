@@ -451,7 +451,7 @@ function InteractiveDashboard() {
 
     try {
       // Call backend API to execute workflow
-      const response = await fetch('http://localhost:8090/api/workflows/execute', {
+      const response = await fetch('/api/workflows/execute', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

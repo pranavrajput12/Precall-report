@@ -4,13 +4,13 @@ import { Settings as SettingsIcon, Database, Download, Upload, RefreshCw, Save, 
 import toast from 'react-hot-toast';
 
 const fetchSystemHealth = async () => {
-  const response = await fetch('http://localhost:8090/api/system/health');
+  const response = await fetch('/api/system/health');
   if (!response.ok) throw new Error('Failed to fetch system health');
   return response.json();
 };
 
 const fetchSystemConfig = async () => {
-  const response = await fetch('http://localhost:8090/api/config/system');
+  const response = await fetch('/api/config/system');
   if (!response.ok) throw new Error('Failed to fetch system config');
   return response.json();
 };
@@ -34,7 +34,7 @@ function Settings() {
 
   const saveConfigMutation = useMutation({
     mutationFn: async (config) => {
-      const response = await fetch('http://localhost:8090/api/config/system', {
+      const response = await fetch('/api/config/system', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config)
@@ -52,7 +52,7 @@ function Settings() {
 
   const createBackupMutation = useMutation({
     mutationFn: async () => {
-      const response = await fetch('http://localhost:8090/api/system/backup', {
+      const response = await fetch('/api/system/backup', {
         method: 'POST'
       });
       if (!response.ok) throw new Error('Failed to create backup');
@@ -68,7 +68,7 @@ function Settings() {
 
   const refreshSystemMutation = useMutation({
     mutationFn: async () => {
-      const response = await fetch('http://localhost:8090/api/system/refresh', {
+      const response = await fetch('/api/system/refresh', {
         method: 'POST'
       });
       if (!response.ok) throw new Error('Failed to refresh system');

@@ -11,21 +11,21 @@ This is a modern LLM workflow orchestration platform that combines a Python Fast
 ### Backend (Python)
 - `pip install -r requirements.txt` - Install Python dependencies
 - `uvicorn app:app --reload` - Start development server with hot reload
-- `uvicorn app:app --host 0.0.0.0 --port 8090` - Start production server
+- `uvicorn app:app --host 0.0.0.0 --port 8100` - Start production server
 - `flake8 .` - Run linting (configured to ignore E501 line length)
 - `celery -A tasks worker --loglevel=info` - Start background task worker
 - `redis-server` - Start Redis for caching and Celery broker
 
 ### Frontend (React)
 - `npm install` - Install Node.js dependencies
-- `npm start` - Start development server (proxies to backend on localhost:8090)
+- `npm start` - Start development server (proxies to backend on localhost:8100)
 - `npm run build` - Build for production
 - `npm test` - Run Jest tests
 - `npm test -- --coverage` - Run tests with coverage report
 
 ### Development Workflow
-- Backend runs on port 8090, frontend on port 3000
-- Frontend proxies API calls to backend via `"proxy": "http://localhost:8090"` in package.json
+- Backend runs on port 8100, frontend on port 3000
+- Frontend proxies API calls to backend via `"proxy": "http://localhost:8100"` in package.json
 - Start both services for full-stack development
 
 ## Technology Stack

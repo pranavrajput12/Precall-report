@@ -6,19 +6,19 @@ import TraceDetailModal from '../components/TraceDetailModal';
 import MetricCard from '../components/MetricCard';
 
 const fetchTraces = async () => {
-  const res = await fetch('http://localhost:8090/api/observability/traces');
+  const res = await fetch('/api/observability/traces');
   if (!res.ok) throw new Error('Failed to fetch traces');
   return res.json();
 };
 
 const fetchMetrics = async () => {
-  const res = await fetch('http://localhost:8090/api/observability/metrics');
+  const res = await fetch('/api/observability/metrics');
   if (!res.ok) throw new Error('Failed to fetch metrics');
   return res.json();
 };
 
 const fetchHealth = async () => {
-  const res = await fetch('http://localhost:8090/api/system/health');
+  const res = await fetch('/api/system/health');
   if (!res.ok) throw new Error('Failed to fetch health');
   return res.json();
 };

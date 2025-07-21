@@ -22,6 +22,13 @@ import clsx from 'clsx';
 
 const navigationItems = [
   {
+    name: 'Run Workflow',
+    href: '/run',
+    icon: Sparkles,
+    description: 'Test your workflow',
+    highlight: true
+  },
+  {
     name: 'Dashboard',
     href: '/dashboard',
     icon: LayoutDashboard,
@@ -150,14 +157,18 @@ function Sidebar({ open, onClose, currentPage, onPageChange }) {
                 }}
                 className={clsx(
                   'group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors',
-                  isActive
+                  item.highlight && !isActive
+                    ? 'bg-blue-600 text-white hover:bg-blue-700'
+                    : isActive
                     ? 'bg-primary-50 text-primary-700 border-r-2 border-primary-600'
                     : 'text-secondary-600 hover:bg-secondary-50 hover:text-secondary-900'
                 )}
               >
                 <Icon className={clsx(
                   'mr-3 h-5 w-5 flex-shrink-0',
-                  isActive
+                  item.highlight && !isActive
+                    ? 'text-white'
+                    : isActive
                     ? 'text-primary-600'
                     : 'text-secondary-400 group-hover:text-secondary-600'
                 )} />

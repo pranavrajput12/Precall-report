@@ -11,6 +11,9 @@ from cache import (async_cache_result, cache_result, metrics_collector,
 from faq import get_faq_answer
 from output_quality import assess_workflow_output_quality
 
+# Set up logging
+logger = logging.getLogger(__name__)
+
 
 def normalize_channel(channel):
     c = channel.strip().lower()
@@ -209,7 +212,7 @@ async def run_profile_enrichment_streaming(
         }
         return  # Fixed: return without value in async generator
     except Exception as e:
-        increment_counter("profile_enrichment_error")
+        metrics_collector.increment_counter("profile_enrichment_error")
         error_msg = f"Error getting profile summary: {str(e)}"
         yield {"type": "profile_enrichment_error", "error": error_msg}
         return  # Fixed: return without value in async generator
@@ -370,7 +373,7 @@ async def run_thread_analysis_streaming(conversation_thread, channel):
         yield {"type": "thread_analysis_complete", "result": final_result}
         return  # Fixed: return without value in async generator
     except Exception as e:
-        increment_counter("thread_analysis_error")
+        metrics_collector.increment_counter("thread_analysis_error")
         error_msg = f'{{"error": "Error analyzing thread: {str(e)}"}}'
         yield {"type": "thread_analysis_error", "error": error_msg}
         return  # Fixed: return without value in async generator
@@ -626,6 +629,8 @@ def run_profile_enrichment(
 
     start_time = time.time()
     try:
+        if llm is None:
+            raise ValueError("LLM is not properly initialized. Check Azure OpenAI configuration.")
         result = llm.invoke(prompt)
         final_result = result.content
 
@@ -641,7 +646,7 @@ def run_profile_enrichment(
 
         return final_result
     except Exception as e:
-        increment_counter("profile_enrichment_error")
+        metrics_collector.increment_counter("profile_enrichment_error")
         return f"Error getting profile summary: {str(e)}"
 
 
@@ -781,6 +786,8 @@ def run_thread_analysis(conversation_thread, channel):
 
     start_time = time.time()
     try:
+        if llm is None:
+            raise ValueError("LLM is not properly initialized. Check Azure OpenAI configuration.")
         result = llm.invoke(prompt)
         final_result = result.content
 
@@ -791,7 +798,7 @@ def run_thread_analysis(conversation_thread, channel):
 
         return final_result
     except Exception as e:
-        increment_counter("thread_analysis_error")
+        metrics_collector.increment_counter("thread_analysis_error")
         return f'{{"error": "Error analyzing thread: {str(e)}"}}'
 
 
@@ -950,6 +957,8 @@ def run_reply_generation(context, channel):
 
     start_time = time.time()
     try:
+        if llm is None:
+            raise ValueError("LLM is not properly initialized. Check Azure OpenAI configuration.")
         result = llm.invoke(prompt)
         final_result = result.content
 
@@ -976,6 +985,8 @@ def run_escalation(reason):
 
     start_time = time.time()
     try:
+        if llm is None:
+            raise ValueError("LLM is not properly initialized. Check Azure OpenAI configuration.")
         result = llm.invoke(prompt)
 
         # Record metrics
@@ -1376,7 +1387,7 @@ async def run_workflow_streaming(
             yield {"type": "workflow_completed", "status": "success", **result}
 
     except Exception as e:
-        increment_counter("workflow_error")
+        metrics_collector.increment_counter("workflow_error")
         yield {
             "type": "workflow_error",
             "error": str(e),
@@ -1401,6 +1412,9 @@ def run_workflow(
     Standard synchronous workflow execution with caching (backward compatibility)
     """
     workflow_start_time = time.time()
+    
+    logger.info(f"Starting workflow with channel: {channel}, prospect_profile_url: {prospect_profile_url}")
+    logger.info(f"LLM object status: {llm is not None}")
 
     try:
         norm_channel = normalize_channel(channel)
@@ -1482,7 +1496,8 @@ def run_workflow(
             "quality_assessment": quality_assessment,
         }
     except Exception as e:
-        increment_counter("workflow_error")
+        logger.error(f"Error in run_workflow: {str(e)}", exc_info=True)
+        metrics_collector.increment_counter("workflow_error")
         raise
 
 

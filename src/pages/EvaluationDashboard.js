@@ -6,13 +6,13 @@ import EvalDetailModal from '../components/EvalDetailModal';
 import MetricCard from '../components/MetricCard';
 
 const fetchSummary = async () => {
-  const res = await fetch('http://localhost:8090/api/evaluation/summary');
+  const res = await fetch('/api/evaluation/summary');
   if (!res.ok) throw new Error('Failed to fetch summary');
   return res.json();
 };
 
 const fetchMetrics = async () => {
-  const res = await fetch('http://localhost:8090/api/evaluation/metrics');
+  const res = await fetch('/api/evaluation/metrics');
   if (!res.ok) throw new Error('Failed to fetch metrics');
   return res.json();
 };
