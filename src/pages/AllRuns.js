@@ -21,6 +21,8 @@ const fetchAllRuns = async () => {
   if (!response.ok) throw new Error('Failed to fetch execution history');
   const data = await response.json();
   console.log('Fetched runs:', data);
+  console.log('Total executions received:', data.executions?.length);
+  console.log('Execution IDs:', data.executions?.map(e => e.id));
   return data.executions || [];
 };
 
@@ -32,7 +34,9 @@ const AllRuns = () => {
   const { data: runs = [], isLoading, refetch } = useQuery({
     queryKey: ['all-runs'],
     queryFn: fetchAllRuns,
-    refetchInterval: 30000 // Refresh every 30 seconds
+    refetchInterval: 10000, // Refresh every 10 seconds
+    staleTime: 5000, // Consider data stale after 5 seconds
+    cacheTime: 0 // Don't cache the data
   });
 
   // Sort runs by date (newest first) and then filter
@@ -141,9 +145,21 @@ const AllRuns = () => {
   return (
     <div className="p-6 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">All Workflow Runs</h1>
-        <p className="text-gray-600">View, search, and manage all your workflow executions</p>
+      <div className="mb-6 flex justify-between items-start">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">All Workflow Runs</h1>
+          <p className="text-gray-600">View, search, and manage all your workflow executions</p>
+        </div>
+        <button
+          onClick={() => {
+            refetch();
+            toast.success('Refreshing data...');
+          }}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+        >
+          <RefreshCw className="w-4 h-4" />
+          Refresh
+        </button>
       </div>
 
       {/* Stats */}

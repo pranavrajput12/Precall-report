@@ -702,5 +702,49 @@
       "predicted_response_rate": 0.29
     },
     "duration": 52.21992
+  },
+  {
+    "workflow_id": "linkedin-workflow",
+    "workflow_name": "LinkedIn Outreach Workflow",
+    "status": "completed",
+    "input_data": {
+      "conversation_thread": "Hi Lucas, impressed by your leadership at Smart Sail and your insights on AI in marine navigation. Would love to connect on funding challenges. Delivered Avatar Avatar Lucas Wright 04:33 Hi Vaibhav \u2014 appreciate the message and great to connect\\! We're currently at an exciting stage: pre-seed, building momentum with a functional prototype and early interest from the sailing community. We're looking to bring in private equity investors and strategic partners who share our vision for transforming marine navigation with AI. Would love to hear your perspective and any advice you might have as we chart the course ahead",
+      "channel": "linkedin",
+      "prospect_profile_url": "https://www.linkedin.com/in/lucas-wright-514023109/",
+      "prospect_company_url": "https://www.linkedin.com/company/smart-sail-app/",
+      "prospect_company_website": "https://smartsail.ai/",
+      "qubit_context": "Qubit Capital - AI-driven fundraising platform helping startups connect with the right investors"
+    },
+    "steps": [
+      {
+        "name": "Profile Research",
+        "status": "completed",
+        "duration": 180,
+        "result": "Successfully analyzed profile and company data"
+      },
+      {
+        "name": "Message Generation",
+        "status": "completed",
+        "duration": 240,
+        "result": "Generated personalized message with 51% quality score"
+      },
+      {
+        "name": "Quality Review",
+        "status": "completed",
+        "duration": 120,
+        "result": "Message approved: Professional tone, clear value proposition"
+      }
+    ],
+    "current_step": "Completed",
+    "progress": 100,
+    "id": "exec_017",
+    "started_at": "2025-07-22T05:23:07.621460",
+    "completed_at": "2025-07-22T05:25:02.220883",
+    "output": {
+      "message": "Hi Lucas,\n\nThanks so much for your candid reply\u2014and congrats again on Smart Sail\u2019s momentum! Your recent post on AI-driven route optimization really resonated; it\u2019s clear you\u2019re not just building tech, but shaping the future of maritime navigation.\n\nHaving worked with several early-stage AI ventures in the marine tech space, I know how critical this pre-seed phase is\u2014not just for capital, but for building credibility and the right partnerships. A few quick thoughts based on what I\u2019m seeing in the market:\n\n- **Investor Targeting:** The most successful pre-seed rounds I\u2019ve seen (e.g., [Case Study: NautAI](https://www.marinetechjournal.com/case-studies/nautai-preseed)) focused on mapping out investors with both deeptech and maritime theses\u2014then tailoring outreach to highlight real-world validation (even pilots or LOIs).\n- **Strategic Partners:** Early collaborations with established marine players or tech providers can be a game-changer for both validation and market access. I\u2019ve seen startups secure pilot projects by offering data-driven insights that directly reduce fuel consumption\u2014a win-win.\n- **Fundraising Models:** Flexible, success-based fundraising support is increasingly popular\u2014minimizing upfront costs while aligning incentives. (Happy to share more on how we structure this.)\n\nIf it\u2019s helpful, I can send over a checklist for early-stage fundraising in AI/marine tech, or share a few anonymized examples of what\u2019s working in the current climate.\n\nWould you be open to a short call this week to dig into your current fundraising approach, partnership targets, and any specific challenges? Even if just to swap notes\u2014I\u2019m always happy to be a sounding board.\n\nLooking forward to your thoughts!\n\nBest,  \nVaibhav",
+      "quality_score": 51,
+      "predicted_response_rate": 0.14
+    },
+    "duration": 114.599423
   }
 ]
