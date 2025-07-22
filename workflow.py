@@ -404,15 +404,17 @@ async def run_reply_generation_streaming(context, channel):
         - Maintains a professional yet personable tone
         - Uses their name and company naturally
         - References specific details that show you've done your research
+        - IMPORTANT: Keep this message between 80-100 words for optimal engagement
 
-        ## FOLLOW-UP SEQUENCE (2-3 messages)
-        Design a strategic follow-up sequence that:
+        ## FOLLOW-UP SEQUENCE (Exactly 3 messages)
+        Design a strategic follow-up sequence with exactly 3 messages that:
         - Builds on the initial conversation momentum
         - Provides additional value at each touchpoint
         - Addresses potential objections proactively
         - Includes social proof and credibility indicators
         - Maintains engagement without being pushy
         - Escalates appropriately toward a meeting or call
+        - IMPORTANT: Keep each follow-up message between 75-125 words
 
         ## PERSONALIZATION ELEMENTS
         Incorporate these personalization strategies:
@@ -442,8 +444,32 @@ async def run_reply_generation_streaming(context, channel):
         - Use raw URLs for all links
         - Keep messages LinkedIn-appropriate (professional but conversational)
         - Include the full conversation thread for context
-        - Structure each message with clear sections
-        - Provide subject lines or message themes for each follow-up
+        - Structure output with clear sections:
+          
+          ## IMMEDIATE RESPONSE
+          [Your 80-100 word message here]
+          [Word Count: X words]
+          
+          ## FOLLOW-UP SEQUENCE
+          
+          ### Follow-up 1 (Day 3-4)
+          [Your 75-125 word message here]
+          [Word Count: X words]
+          
+          ### Follow-up 2 (Day 7-10)
+          [Your 75-125 word message here]
+          [Word Count: X words]
+          
+          ### Follow-up 3 (Day 14-21)
+          [Your 75-125 word message here]
+          [Word Count: X words]
+          
+        - At the end, provide a WORD COUNT SUMMARY section with:
+          * Immediate Response: X words
+          * Follow-up 1: X words
+          * Follow-up 2: X words
+          * Follow-up 3: X words
+          * Total Word Count: X words
 
         TONE AND STYLE:
         - Professional yet approachable
@@ -830,15 +856,17 @@ def run_reply_generation(context, channel):
         - Maintains a professional yet personable tone
         - Uses their name and company naturally
         - References specific details that show you've done your research
+        - IMPORTANT: Keep this message between 80-100 words for optimal engagement
 
-        ## FOLLOW-UP SEQUENCE (2-3 messages)
-        Design a strategic follow-up sequence that:
+        ## FOLLOW-UP SEQUENCE (Exactly 3 messages)
+        Design a strategic follow-up sequence with exactly 3 messages that:
         - Builds on the initial conversation momentum
         - Provides additional value at each touchpoint
         - Addresses potential objections proactively
         - Includes social proof and credibility indicators
         - Maintains engagement without being pushy
         - Escalates appropriately toward a meeting or call
+        - IMPORTANT: Keep each follow-up message between 75-125 words
 
         ## PERSONALIZATION ELEMENTS
         Incorporate these personalization strategies:
@@ -868,8 +896,32 @@ def run_reply_generation(context, channel):
         - Use raw URLs for all links
         - Keep messages LinkedIn-appropriate (professional but conversational)
         - Include the full conversation thread for context
-        - Structure each message with clear sections
-        - Provide subject lines or message themes for each follow-up
+        - Structure output with clear sections:
+          
+          ## IMMEDIATE RESPONSE
+          [Your 80-100 word message here]
+          [Word Count: X words]
+          
+          ## FOLLOW-UP SEQUENCE
+          
+          ### Follow-up 1 (Day 3-4)
+          [Your 75-125 word message here]
+          [Word Count: X words]
+          
+          ### Follow-up 2 (Day 7-10)
+          [Your 75-125 word message here]
+          [Word Count: X words]
+          
+          ### Follow-up 3 (Day 14-21)
+          [Your 75-125 word message here]
+          [Word Count: X words]
+          
+        - At the end, provide a WORD COUNT SUMMARY section with:
+          * Immediate Response: X words
+          * Follow-up 1: X words
+          * Follow-up 2: X words
+          * Follow-up 3: X words
+          * Total Word Count: X words
 
         TONE AND STYLE:
         - Professional yet approachable
@@ -980,6 +1032,134 @@ def run_reply_generation(context, channel):
     except Exception as e:
         increment_counter("reply_generation_error")
         return f"Error generating reply: {str(e)}"
+
+
+def extract_word_counts(reply_text):
+    """Extract word counts from the generated reply text"""
+    import re
+    
+    try:
+        # Extract individual message word counts
+        word_count_pattern = r'\[Word Count: (\d+) words?\]'
+        word_counts = re.findall(word_count_pattern, reply_text)
+        
+        # Extract word count summary if present
+        summary_pattern = r'WORD COUNT SUMMARY.*?Total Word Count: (\d+) words?'
+        summary_match = re.search(summary_pattern, reply_text, re.DOTALL)
+        
+        # Parse the summary section for individual message counts
+        message_stats = {}
+        if "WORD COUNT SUMMARY" in reply_text:
+            summary_section = reply_text.split("WORD COUNT SUMMARY")[-1]
+            
+            # Extract immediate response word count
+            immediate_match = re.search(r'Immediate Response: (\d+) words?', summary_section)
+            if immediate_match:
+                message_stats['immediate_response'] = int(immediate_match.group(1))
+            
+            # Extract follow-up word counts
+            followup_matches = re.findall(r'Follow-up (\d+): (\d+) words?', summary_section)
+            for followup_num, word_count in followup_matches:
+                message_stats[f'followup_{followup_num}'] = int(word_count)
+            
+            # Extract total word count
+            total_match = re.search(r'Total Word Count: (\d+) words?', summary_section)
+            if total_match:
+                message_stats['total'] = int(total_match.group(1))
+        
+        return {
+            'individual_counts': [int(count) for count in word_counts],
+            'message_stats': message_stats,
+            'has_word_counts': len(word_counts) > 0 or len(message_stats) > 0
+        }
+    except Exception as e:
+        logger.error(f"Error extracting word counts: {str(e)}")
+        return {
+            'individual_counts': [],
+            'message_stats': {},
+            'has_word_counts': False
+        }
+
+
+def parse_linkedin_messages(reply_text):
+    """Parse the structured LinkedIn reply into immediate response and follow-up sequence"""
+    import re
+    
+    try:
+        messages = {
+            'immediate_response': None,
+            'follow_up_sequence': []
+        }
+        
+        # Extract immediate response
+        immediate_pattern = r'## IMMEDIATE RESPONSE\s*\n(.*?)\[Word Count: (\d+) words?\]'
+        immediate_match = re.search(immediate_pattern, reply_text, re.DOTALL)
+        if immediate_match:
+            message_text = immediate_match.group(1).strip()
+            # Remove any trailing dashes or separators
+            message_text = re.sub(r'\n---\s*$', '', message_text).strip()
+            messages['immediate_response'] = {
+                'message': message_text,
+                'word_count': int(immediate_match.group(2))
+            }
+        
+        # Extract follow-up messages - handle the section structure
+        followup_section_pattern = r'## FOLLOW-UP SEQUENCE\s*\n(.*?)(?=## WORD COUNT SUMMARY|$)'
+        followup_section_match = re.search(followup_section_pattern, reply_text, re.DOTALL)
+        
+        if followup_section_match:
+            followup_content = followup_section_match.group(1)
+            # Extract individual follow-ups
+            followup_pattern = r'### Follow-up (\d+) \((.*?)\)\s*\n(.*?)\[Word Count: (\d+) words?\]'
+            followup_matches = re.findall(followup_pattern, followup_content, re.DOTALL)
+            
+            for match in followup_matches:
+                followup_num = int(match[0])
+                timing = match[1]
+                message = match[2].strip()
+                # Remove any trailing dashes or separators
+                message = re.sub(r'\n---\s*$', '', message).strip()
+                word_count = int(match[3])
+                
+                messages['follow_up_sequence'].append({
+                    'number': followup_num,
+                    'timing': timing,
+                    'message': message,
+                    'word_count': word_count
+                })
+        
+        # Sort follow-ups by number
+        messages['follow_up_sequence'].sort(key=lambda x: x['number'])
+        
+        # If we didn't find structured content, try to parse from the raw text
+        if not messages['immediate_response'] and "Hi " in reply_text:
+            # Try to extract just the immediate response portion
+            lines = reply_text.split('\n')
+            message_lines = []
+            for line in lines:
+                if line.strip() and not line.startswith(('#', '**', 'WORD COUNT', '---')):
+                    message_lines.append(line)
+                elif 'Follow-up' in line:
+                    break
+            if message_lines:
+                message_text = '\n'.join(message_lines).strip()
+                messages['immediate_response'] = {
+                    'message': message_text,
+                    'word_count': len(message_text.split())
+                }
+        
+        return messages
+    
+    except Exception as e:
+        logger.error(f"Error parsing LinkedIn messages: {str(e)}")
+        # Return the original text as immediate response if parsing fails
+        return {
+            'immediate_response': {
+                'message': reply_text,
+                'word_count': len(reply_text.split())
+            },
+            'follow_up_sequence': []
+        }
 
 
 def run_escalation(reason):
@@ -1211,9 +1391,23 @@ async def run_workflow_parallel_streaming(
             profile_summary, thread_analysis, reply, context
         )
 
+        # Extract word counts from the reply
+        word_count_info = extract_word_counts(reply) if reply and isinstance(reply, str) else {
+            'individual_counts': [],
+            'message_stats': {},
+            'has_word_counts': False
+        }
+        
+        # Parse LinkedIn messages into structured format
+        parsed_messages = None
+        if reply and isinstance(reply, str) and norm_channel == "linkedin":
+            parsed_messages = parse_linkedin_messages(reply)
+        
         result = {
             "context": context,
             "reply": reply,
+            "parsed_messages": parsed_messages,
+            "word_count_info": word_count_info,
             "timestamp": asyncio.get_event_loop().time(),
             "processing_time": time.time() - workflow_start_time,
             "mode": "parallel",
@@ -1407,9 +1601,23 @@ async def run_workflow_streaming(
             profile_summary, thread_analysis, reply, context
         )
 
+        # Extract word counts from the reply
+        word_count_info = extract_word_counts(reply) if reply and isinstance(reply, str) else {
+            'individual_counts': [],
+            'message_stats': {},
+            'has_word_counts': False
+        }
+        
+        # Parse LinkedIn messages into structured format
+        parsed_messages = None
+        if reply and isinstance(reply, str) and norm_channel == "linkedin":
+            parsed_messages = parse_linkedin_messages(reply)
+
         result = {
             "context": context,
             "reply": reply,
+            "parsed_messages": parsed_messages,
+            "word_count_info": word_count_info,
             "timestamp": asyncio.get_event_loop().time(),
             "quality_assessment": quality_assessment,
         }
@@ -1550,19 +1758,34 @@ def run_workflow(
             escalation = run_escalation(
                 "Missing data" if missing_data else "Low confidence"
             )
+            # Extract word counts from the reply even in escalation case
+            word_count_info = extract_word_counts(reply) if reply and isinstance(reply, str) else {
+                'individual_counts': [],
+                'message_stats': {},
+                'has_word_counts': False
+            }
             return {
                 "escalation": escalation,
                 "context": context,
-                "reply": reply}
+                "reply": reply,
+                "word_count_info": word_count_info}
 
         # Assess output quality
         quality_assessment = assess_workflow_output_quality(
             profile_summary, thread_analysis, reply, context
         )
 
+        # Extract word counts from the reply
+        word_count_info = extract_word_counts(reply) if reply and isinstance(reply, str) else {
+            'individual_counts': [],
+            'message_stats': {},
+            'has_word_counts': False
+        }
+
         return {
             "context": context,
             "reply": reply,
+            "word_count_info": word_count_info,
             "quality_assessment": quality_assessment,
         }
     except Exception as e:

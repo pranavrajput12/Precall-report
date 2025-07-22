@@ -71,15 +71,27 @@ const AllRuns = () => {
   const copyAllMessages = () => {
     const allMessages = filteredRuns
       .filter(run => run.output?.message)
-      .map(run => `--- ${run.id} (${new Date(run.started_at).toLocaleString()}) ---\n${run.output.message}\n`)
-      .join('\n');
+      .map(run => {
+        let messageText = `--- ${run.id} (${new Date(run.started_at).toLocaleString()}) ---\n`;
+        messageText += `IMMEDIATE RESPONSE:\n${run.output.immediate_response || run.output.message}\n`;
+        
+        if (run.output.follow_up_sequence && run.output.follow_up_sequence.length > 0) {
+          messageText += '\nFOLLOW-UP SEQUENCE:\n';
+          run.output.follow_up_sequence.forEach((followup, index) => {
+            messageText += `\nFollow-up ${index + 1} (${followup.timing}):\n${followup.message}\n`;
+          });
+        }
+        
+        return messageText;
+      })
+      .join('\n---\n\n');
     
     navigator.clipboard.writeText(allMessages);
-    toast.success(`Copied ${filteredRuns.length} messages to clipboard!`);
+    toast.success(`Copied ${filteredRuns.length} message sequences to clipboard!`);
   };
 
   const exportToCSV = () => {
-    const headers = ['ID', 'Status', 'Started At', 'Duration', 'Company', 'Quality Score', 'Message'];
+    const headers = ['ID', 'Status', 'Started At', 'Duration', 'Company', 'Quality Score', 'Immediate Response', 'Follow-up 1', 'Follow-up 2', 'Follow-up 3'];
     const rows = filteredRuns.map(run => [
       run.id,
       run.status,
@@ -87,7 +99,10 @@ const AllRuns = () => {
       run.duration ? `${run.duration.toFixed(1)}s` : 'N/A',
       run.input_data?.prospect_company_url || '',
       run.output?.quality_score || '',
-      run.output?.message?.replace(/\n/g, ' ') || ''
+      (run.output?.immediate_response || run.output?.message || '').replace(/\n/g, ' '),
+      run.output?.follow_up_sequence?.[0]?.message?.replace(/\n/g, ' ') || '',
+      run.output?.follow_up_sequence?.[1]?.message?.replace(/\n/g, ' ') || '',
+      run.output?.follow_up_sequence?.[2]?.message?.replace(/\n/g, ' ') || ''
     ]);
 
     const csvContent = [
@@ -258,7 +273,7 @@ const AllRuns = () => {
               className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
             >
               <Copy className="w-4 h-4" />
-              Copy All
+              Copy All Sequences
             </button>
 
             <button
@@ -307,6 +322,11 @@ const AllRuns = () => {
                         Quality: {run.output.quality_score}%
                       </span>
                     )}
+                    {run.output?.has_follow_ups && (
+                      <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full">
+                        +3 Follow-ups
+                      </span>
+                    )}
                     {run.duration && (
                       <span className="text-sm text-gray-500">
                         {run.duration.toFixed(1)}s
@@ -341,23 +361,77 @@ const AllRuns = () => {
                   {run.output?.message && (
                     <div className="p-4">
                       <div className="flex items-center justify-between mb-2">
-                        <h4 className="font-medium text-gray-900">Generated Message</h4>
+                        <h4 className="font-medium text-gray-900">Immediate Response</h4>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            copyMessage(run.output.message);
+                            copyMessage(run.output.immediate_response || run.output.message);
                           }}
                           className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg text-sm flex items-center gap-1 transition-colors"
                         >
                           <Copy className="w-3 h-3" />
-                          Copy Message
+                          Copy Immediate
                         </button>
                       </div>
                       <div className="bg-white border rounded-lg p-4">
                         <pre className="whitespace-pre-wrap text-sm text-gray-800 font-sans">
-                          {run.output.message}
+                          {run.output.immediate_response || run.output.message}
                         </pre>
                       </div>
+                      
+                      {/* Follow-up Sequence */}
+                      {run.output.follow_up_sequence && run.output.follow_up_sequence.length > 0 && (
+                        <div className="mt-4">
+                          <h4 className="font-medium text-gray-900 mb-3">Follow-up Sequence</h4>
+                          <div className="space-y-3">
+                            {run.output.follow_up_sequence.map((followup, index) => (
+                              <div key={index} className="bg-gray-50 border rounded-lg p-4">
+                                <div className="flex items-center justify-between mb-2">
+                                  <div>
+                                    <span className="font-medium text-gray-900">Follow-up {index + 1}</span>
+                                    <span className="ml-2 text-sm text-gray-600">({followup.timing})</span>
+                                    <span className="ml-2 text-xs text-gray-500">{followup.word_count} words</span>
+                                  </div>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      copyMessage(followup.message);
+                                    }}
+                                    className="bg-gray-600 hover:bg-gray-700 text-white px-2 py-1 rounded text-xs flex items-center gap-1 transition-colors"
+                                  >
+                                    <Copy className="w-3 h-3" />
+                                    Copy
+                                  </button>
+                                </div>
+                                <pre className="whitespace-pre-wrap text-sm text-gray-700 font-sans">
+                                  {followup.message}
+                                </pre>
+                              </div>
+                            ))}
+                          </div>
+                          
+                          {/* Copy All Messages Button */}
+                          <div className="mt-3 flex justify-end">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const allMessages = [
+                                  `IMMEDIATE RESPONSE:\n${run.output.immediate_response || run.output.message}`,
+                                  ...run.output.follow_up_sequence.map((f, i) => 
+                                    `\nFOLLOW-UP ${i + 1} (${f.timing}):\n${f.message}`
+                                  )
+                                ].join('\n\n---\n\n');
+                                navigator.clipboard.writeText(allMessages);
+                                toast.success('Copied all messages!');
+                              }}
+                              className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-lg text-sm flex items-center gap-1 transition-colors"
+                            >
+                              <Copy className="w-3 h-3" />
+                              Copy All Messages
+                            </button>
+                          </div>
+                        </div>
+                      )}
                       
                       {/* Metrics */}
                       <div className="mt-4 grid grid-cols-2 gap-4">

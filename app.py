@@ -558,42 +558,59 @@ async def run(
             result = run_workflow(**input_data)
             logger.info(f"run_workflow returned: {result}")
             
-            # Extract just the message content from the reply
-            reply_content = result.get("reply", "")
-            # Try to extract just the message part if it's a strategy document
-            if "## IMMEDIATE RESPONSE" in reply_content or "**Message:**" in reply_content:
-                # Extract the message content from the strategy
-                try:
-                    message_start = reply_content.find("**Message:**")
-                    if message_start != -1:
-                        message_content = reply_content[message_start + 12:]
-                        # Find the end of the message (next section)
-                        message_end = message_content.find("---")
-                        if message_end != -1:
-                            message_content = message_content[:message_end].strip()
-                        else:
-                            # Look for next section marker
-                            next_section = message_content.find("##")
-                            if next_section != -1:
-                                message_content = message_content[:next_section].strip()
+            # Extract messages from the structured reply
+            parsed_messages = result.get("parsed_messages")
+            message_content = ""
+            follow_up_sequence = []
+            
+            if parsed_messages and parsed_messages.get("immediate_response"):
+                # Use parsed messages if available
+                immediate_msg = parsed_messages["immediate_response"]
+                message_content = immediate_msg.get("message", "")
+                
+                # Extract follow-up sequence
+                for followup in parsed_messages.get("follow_up_sequence", []):
+                    follow_up_sequence.append({
+                        "message": followup["message"],
+                        "timing": followup["timing"],
+                        "word_count": followup["word_count"]
+                    })
+            else:
+                # Fallback to original parsing if structured parsing failed
+                reply_content = result.get("reply", "")
+                if "## IMMEDIATE RESPONSE" in reply_content or "**Message:**" in reply_content:
+                    # Extract the message content from the strategy
+                    try:
+                        message_start = reply_content.find("**Message:**")
+                        if message_start != -1:
+                            message_content = reply_content[message_start + 12:]
+                            # Find the end of the message (next section)
+                            message_end = message_content.find("---")
+                            if message_end != -1:
+                                message_content = message_content[:message_end].strip()
                             else:
-                                # If no section break, take everything after "Message:"
-                                message_content = message_content.strip()
-                    else:
-                        # Try alternative patterns
-                        if "**Message:**" in reply_content:
-                            # Look for message after "Message:"
-                            parts = reply_content.split("**Message:**")
-                            if len(parts) > 1:
-                                message_content = parts[1].split("---")[0].strip()
+                                # Look for next section marker
+                                next_section = message_content.find("##")
+                                if next_section != -1:
+                                    message_content = message_content[:next_section].strip()
+                                else:
+                                    # If no section break, take everything after "Message:"
+                                    message_content = message_content.strip()
+                        else:
+                            # Try alternative patterns
+                            if "**Message:**" in reply_content:
+                                # Look for message after "Message:"
+                                parts = reply_content.split("**Message:**")
+                                if len(parts) > 1:
+                                    message_content = parts[1].split("---")[0].strip()
+                                else:
+                                    message_content = reply_content
                             else:
                                 message_content = reply_content
-                        else:
-                            message_content = reply_content
-                except:
+                    except:
+                        message_content = reply_content
+                else:
                     message_content = reply_content
-            else:
-                message_content = reply_content
 
             # Evaluate the generated message
             quality_score = 85  # Default
@@ -671,8 +688,11 @@ async def run(
                 "progress": 100,
                 "output": {
                     "message": message_content,
+                    "immediate_response": message_content,
+                    "follow_up_sequence": follow_up_sequence,
                     "quality_score": quality_score,
-                    "predicted_response_rate": predicted_response_rate
+                    "predicted_response_rate": predicted_response_rate,
+                    "has_follow_ups": len(follow_up_sequence) > 0
                 },
                 "steps": [
                     {
@@ -1090,8 +1110,27 @@ async def create_demo_execution():
         ],
         "output": {
             "message": "Hi Steven, I noticed your recent Forbes feature and Hydra EVC's innovative EV charging solutions. Your leadership in sustainable transportation is impressive, and I'd love to connect to discuss potential collaboration opportunities. Would you be open to a brief conversation about how we might support Hydra's growth initiatives?",
+            "immediate_response": "Hi Steven, I noticed your recent Forbes feature and Hydra EVC's innovative EV charging solutions. Your leadership in sustainable transportation is impressive, and I'd love to connect to discuss potential collaboration opportunities. Would you be open to a brief conversation about how we might support Hydra's growth initiatives?",
+            "follow_up_sequence": [
+                {
+                    "message": "Hi Steven, Following up on my previous message about Hydra EVC. I've been researching the EV charging infrastructure space and noticed your recent expansion into commercial fleet solutions. With your background in scaling tech companies, I imagine you're navigating interesting challenges around standardization and rapid deployment. Happy to share some insights from similar companies we've helped scale their infrastructure. Worth a quick chat?",
+                    "timing": "Day 3-4",
+                    "word_count": 89
+                },
+                {
+                    "message": "Steven, Quick thought - with the recent federal infrastructure bill allocating $7.5B for EV charging networks, there's a significant opportunity for companies like Hydra EVC. We've helped several cleantech companies secure government contracts and navigate the procurement process. If you're exploring these opportunities, I'd be happy to share our playbook and introduce you to relevant contacts in our network. Let me know if this would be valuable.",
+                    "timing": "Day 7-10",
+                    "word_count": 92
+                },
+                {
+                    "message": "Hi Steven, Last follow-up - I'll be in the Bay Area next week meeting with other cleantech founders. Would love to grab coffee if you're available. Alternatively, happy to send over a brief case study on how we helped ChargePoint scale their B2B partnerships. Either way, best of luck with Hydra's continued growth. The work you're doing in sustainable transportation is truly impactful.",
+                    "timing": "Day 14-21",
+                    "word_count": 85
+                }
+            ],
             "quality_score": 94,
-            "predicted_response_rate": 0.48
+            "predicted_response_rate": 0.48,
+            "has_follow_ups": true
         }
     }
     
