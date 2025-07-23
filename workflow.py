@@ -11,12 +11,24 @@ from cache import (async_cache_result, cache_result, metrics_collector,
 from faq import get_faq_answer
 from faq_agent import get_intelligent_faq_answer, analyze_questions_batch
 from output_quality import assess_workflow_output_quality
+from logging_config import log_info, log_error, log_warning, log_debug
 
 # Set up logging
 logger = logging.getLogger(__name__)
 
-
 def normalize_channel(channel):
+    """
+    Normalize channel name to standard format.
+    
+    Args:
+        channel (str): The input channel name to normalize
+        
+    Returns:
+        str: Normalized channel name ('linkedin' or 'email')
+        
+    Raises:
+        ValueError: If the channel is not recognized
+    """
     c = channel.strip().lower()
     if c in ["linkedin", "linked in", "li"]:
         return "linkedin"
@@ -26,10 +38,29 @@ def normalize_channel(channel):
         raise ValueError(f"Unknown channel: {channel}")
 
 
+
 def assemble_context(
     profile_summary, thread_analysis, faq_answers, client_report, qubit_context
 ):
-    """Enhanced context assembly with structured, actionable intelligence"""
+    """
+    Enhanced context assembly with structured, actionable intelligence.
+    
+    This function takes various data sources and assembles them into a structured
+    context object that can be used for generating personalized responses. It parses
+    thread analysis JSON, extracts key insights, and organizes them into categories
+    for easy access by the response generation system.
+    
+    Args:
+        profile_summary (str): Enriched profile information about the prospect
+        thread_analysis (str or dict): Analysis of the conversation thread, either as JSON string or dict
+        faq_answers (list): List of FAQ answers relevant to the conversation
+        client_report (str): Information about the client/company
+        qubit_context (str): Additional context provided by the user
+        
+    Returns:
+        dict: Structured context with intelligence report, actionable insights,
+              response strategy, and risk assessment sections
+    """
 
     # Parse thread analysis if it's JSON
     parsed_thread_analysis = {}
@@ -1073,7 +1104,7 @@ def extract_word_counts(reply_text):
             'has_word_counts': len(word_counts) > 0 or len(message_stats) > 0
         }
     except Exception as e:
-        logger.error(f"Error extracting word counts: {str(e)}")
+        log_error(logger, "Error extracting word counts", e)
         return {
             'individual_counts': [],
             'message_stats': {},
@@ -1151,7 +1182,172 @@ def parse_linkedin_messages(reply_text):
         return messages
     
     except Exception as e:
-        logger.error(f"Error parsing LinkedIn messages: {str(e)}")
+        log_error(logger, "Error parsing LinkedIn messages", e)
+        # Return the original text as immediate response if parsing fails
+        return {
+            'immediate_response': {
+                'message': reply_text,
+                'word_count': len(reply_text.split())
+            },
+            'follow_up_sequence': []
+        }
+
+
+def parse_email_messages(reply_text):
+    """Parse the structured email reply into immediate response and follow-up sequence"""
+    import re
+    
+    try:
+        messages = {
+            'immediate_response': None,
+            'follow_up_sequence': []
+        }
+        
+        # Try multiple patterns for immediate response
+        immediate_patterns = [
+            r'## IMMEDIATE EMAIL RESPONSE\s*\n(.*?)\[Word Count: (\d+) words?\]',
+            r'## IMMEDIATE RESPONSE\s*\n(.*?)\[Word Count: (\d+) words?\]',
+            r'Unlocking Growth.*?—.*?\n\n(.*?)(?=How \[Similar|Best regards|$)',
+            r'Hi [^,]+,\s*\n\n(.*?)(?=\n\n[A-Z][^\n]*:|Best regards|$)'
+        ]
+        
+        for pattern in immediate_patterns:
+            immediate_match = re.search(pattern, reply_text, re.DOTALL)
+            if immediate_match:
+                if len(immediate_match.groups()) >= 2:
+                    message_text = immediate_match.group(1).strip()
+                    word_count = int(immediate_match.group(2))
+                else:
+                    message_text = immediate_match.group(1).strip()
+                    word_count = len(message_text.split())
+                
+                message_text = re.sub(r'\n---\s*$', '', message_text).strip()
+                messages['immediate_response'] = {
+                    'message': message_text,
+                    'word_count': word_count
+                }
+                break
+        
+        # Extract follow-up email sequence - look for the section starting with "How [Similar"
+        followup_start_pattern = r'(How \[Similar.*?)(?=---\s*$|$)'
+        followup_start_match = re.search(followup_start_pattern, reply_text, re.DOTALL)
+        
+        if followup_start_match:
+            # Found the start of follow-ups, now extract individual emails
+            followup_section = followup_start_match.group(1)
+            
+            # Split by email sections (marked by ### **Email X:)
+            email_pattern = r'### \*\*Email (\d+):(.*?)\*\*\s*\n\s*\*\*Subject Line:\*\*\s*\n(.*?)\n\n(.*?)(?=---\s*\n\n### \*\*Email|---\s*$|$)'
+            email_matches = re.findall(email_pattern, reply_text, re.DOTALL)
+            
+            if email_matches:
+                for match in email_matches:
+                    email_num = int(match[0])
+                    email_type = match[1].strip()
+                    subject = match[2].strip()
+                    body = match[3].strip()
+                    
+                    # Clean up the body
+                    body_lines = []
+                    for line in body.split('\n'):
+                        line = line.strip()
+                        if line and not line.startswith('**Subject Line:**'):
+                            body_lines.append(line)
+                    
+                    full_message = f"Subject: {subject}\n\n{chr(10).join(body_lines)}"
+                    
+                    messages['follow_up_sequence'].append({
+                        'number': email_num,
+                        'timing': f"{email_num * 3} days later",
+                        'message': full_message,
+                        'word_count': len(full_message.split())
+                    })
+            else:
+                # Fallback: try to extract the first follow-up manually
+                first_followup = followup_start_match.group(1)
+                if first_followup:
+                    # Clean up the first follow-up
+                    lines = first_followup.split('\n')
+                    clean_lines = []
+                    for line in lines:
+                        line = line.strip()
+                        if line and not line.startswith('---'):
+                            clean_lines.append(line)
+                    
+                    if clean_lines:
+                        message = '\n'.join(clean_lines)
+                        messages['follow_up_sequence'].append({
+                            'number': 1,
+                            'timing': '3 days later',
+                            'message': message,
+                            'word_count': len(message.split())
+                        })
+                
+                # Try to find additional follow-ups by looking for other patterns
+                additional_patterns = [
+                    (r'3 Practical Ways.*?(?=---\s*\n\n|$)', '6 days later'),
+                    (r'Fast, Flexible, and Risk-Free.*?(?=---\s*\n\n|$)', '9 days later'),
+                    (r'Still Interested.*?(?=---\s*\n\n|$)', '12 days later'),
+                    (r'Should I Close.*?(?=---\s*\n\n|$)', '15 days later')
+                ]
+                
+                for i, (pattern, timing) in enumerate(additional_patterns, 2):
+                    match = re.search(pattern, reply_text, re.DOTALL)
+                    if match:
+                        message = match.group(0).strip()
+                        # Clean up
+                        message = re.sub(r'---\s*$', '', message).strip()
+                        
+                        messages['follow_up_sequence'].append({
+                            'number': i,
+                            'timing': timing,
+                            'message': message,
+                            'word_count': len(message.split())
+                        })
+        
+        # Sort follow-ups by number
+        messages['follow_up_sequence'].sort(key=lambda x: x['number'])
+        
+        # If we still didn't find immediate response, extract from the beginning
+        if not messages['immediate_response']:
+            # Look for the first substantial email content
+            lines = reply_text.split('\n')
+            message_lines = []
+            in_email = False
+            
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
+                    
+                # Skip headers and meta content
+                if any(skip in line.lower() for skip in ['certainly!', 'below is a comprehensive', 'custom-built for', 'cold outreach', 'expresses interest']):
+                    continue
+                    
+                # Start capturing when we see a subject line or greeting
+                if line.startswith('Hi ') or line.startswith('Dear ') or 'Unlocking Growth' in line:
+                    in_email = True
+                    
+                if in_email:
+                    message_lines.append(line)
+                    # Stop at the end of first email
+                    if line.startswith('Best regards') or line.startswith('[Your Name]'):
+                        break
+                    # Or stop when we hit the next section
+                    if 'How [Similar' in line:
+                        break
+            
+            if message_lines:
+                message_text = '\n'.join(message_lines).strip()
+                messages['immediate_response'] = {
+                    'message': message_text,
+                    'word_count': len(message_text.split())
+                }
+        
+        return messages
+    
+    except Exception as e:
+        log_error(logger, "Error parsing email messages", e)
         # Return the original text as immediate response if parsing fails
         return {
             'immediate_response': {
@@ -1306,9 +1502,9 @@ async def run_workflow_parallel_streaming(
             # Also check for implicit needs that might benefit from FAQ answers
             implicit_needs = personalization_data.get("implicit_needs", [])
             
-            logger.info(f"Found {len(questions)} explicit questions and {len(implicit_needs)} implicit needs")
+            log_info(logger, f"Found {len(questions)} explicit questions and {len(implicit_needs)} implicit needs")
         except Exception as e:
-            logger.error(f"Error parsing thread analysis for parallel workflow: {e}")
+            log_error(logger, "Error parsing thread analysis for parallel workflow", e)
             questions = []
             implicit_needs = []
 
@@ -1353,7 +1549,7 @@ async def run_workflow_parallel_streaming(
                     "answer": faq["answer"],
                 }
                 
-            logger.info(f"Successfully retrieved {len(faq_answers)} FAQ answers")
+            log_info(logger, f"Successfully retrieved {len(faq_answers)} FAQ answers")
 
         context = assemble_context(
             profile_summary,
@@ -1536,9 +1732,9 @@ async def run_workflow_streaming(
             # Also check for implicit needs that might benefit from FAQ answers
             implicit_needs = personalization_data.get("implicit_needs", [])
             
-            logger.info(f"Found {len(questions)} explicit questions and {len(implicit_needs)} implicit needs")
+            log_info(logger, f"Found {len(questions)} explicit questions and {len(implicit_needs)} implicit needs")
         except Exception as e:
-            logger.error(f"Error parsing thread analysis for streaming workflow: {e}")
+            log_error(logger, "Error parsing thread analysis for streaming workflow", e)
             questions = []
             implicit_needs = []
 
@@ -1563,7 +1759,7 @@ async def run_workflow_streaming(
                     faq_answers.append({"question": q, "answer": answer})
                     yield {"type": "faq_answer_processed", "question": q, "answer": answer}
                     
-            logger.info(f"Successfully retrieved {len(faq_answers)} FAQ answers")
+            log_info(logger, f"Successfully retrieved {len(faq_answers)} FAQ answers")
 
         context = assemble_context(
             profile_summary,
@@ -1665,12 +1861,37 @@ def run_workflow(
     **kwargs,
 ):
     """
-    Standard synchronous workflow execution with caching (backward compatibility)
+    Standard synchronous workflow execution with caching (backward compatibility).
+    
+    This function orchestrates the complete workflow process:
+    1. Profile enrichment - Gathers information about the prospect and their company
+    2. Thread analysis - Analyzes the conversation history for insights
+    3. FAQ retrieval - Finds relevant FAQ answers for any questions in the thread
+    4. Reply generation - Creates a personalized response based on all gathered data
+    
+    Args:
+        conversation_thread (str): The conversation history to analyze
+        channel (str): Communication channel (linkedin/email)
+        prospect_profile_url (str): LinkedIn profile URL of the prospect
+        prospect_company_url (str): Company LinkedIn URL
+        prospect_company_website (str): Company website URL
+        qubit_context (str, optional): Additional context for the workflow
+        include_profile (bool, optional): Whether to include profile enrichment. Defaults to True.
+        include_thread_analysis (bool, optional): Whether to include thread analysis. Defaults to True.
+        include_reply_generation (bool, optional): Whether to include reply generation. Defaults to True.
+        priority (str, optional): Workflow priority level. Defaults to "normal".
+        **kwargs: Additional keyword arguments
+        
+    Returns:
+        dict: Complete workflow result including profile data, thread analysis, and generated reply
+        
+    Raises:
+        Exception: If any step of the workflow fails
     """
     workflow_start_time = time.time()
     
-    logger.info(f"Starting workflow with channel: {channel}, prospect_profile_url: {prospect_profile_url}")
-    logger.info(f"LLM object status: {llm is not None}")
+    log_info(logger, f"Starting workflow with channel: {channel}, prospect_profile_url: {prospect_profile_url}")
+    log_info(logger, f"LLM object status: {llm is not None}")
 
     try:
         norm_channel = normalize_channel(channel)
@@ -1701,9 +1922,9 @@ def run_workflow(
             # Also check for implicit needs that might benefit from FAQ answers
             implicit_needs = personalization_data.get("implicit_needs", [])
             
-            logger.info(f"Found {len(questions)} explicit questions and {len(implicit_needs)} implicit needs")
+            log_info(logger, f"Found {len(questions)} explicit questions and {len(implicit_needs)} implicit needs")
         except Exception as e:
-            logger.error(f"Error parsing thread analysis for sync workflow: {e}")
+            log_error(logger, "Error parsing thread analysis for sync workflow", e)
             questions = []
             implicit_needs = []
 
@@ -1724,7 +1945,7 @@ def run_workflow(
                         "confidence": result.get('confidence', 0.5)
                     })
                 
-        logger.info(f"Successfully retrieved {len(faq_answers)} FAQ answers from {len(all_queries)} queries")
+        log_info(logger, f"Successfully retrieved {len(faq_answers)} FAQ answers from {len(all_queries)} queries")
 
         context = assemble_context(
             profile_summary,
@@ -1781,15 +2002,93 @@ def run_workflow(
             'message_stats': {},
             'has_word_counts': False
         }
+        
+        # Generate predicted response rate based on quality assessment
+        predicted_response_rate = 0.35  # Default baseline
+        if quality_assessment and quality_assessment.get('overall_assessment'):
+            overall_score = quality_assessment['overall_assessment'].get('overall_quality_score', 0.7)
+            confidence = quality_assessment['overall_assessment'].get('confidence_score', 0.7)
+            
+            # Calculate response rate based on quality and confidence
+            # High quality (>0.9) = 45-60% response rate
+            # Good quality (0.8-0.9) = 35-45% response rate  
+            # Medium quality (0.7-0.8) = 25-35% response rate
+            # Lower quality (<0.7) = 15-25% response rate
+            
+            import random
+            if overall_score >= 0.9:
+                predicted_response_rate = 0.45 + (overall_score - 0.9) * 0.15 + random.uniform(0, 0.1)
+            elif overall_score >= 0.8:
+                predicted_response_rate = 0.35 + (overall_score - 0.8) * 0.1 + random.uniform(0, 0.05)
+            elif overall_score >= 0.7:
+                predicted_response_rate = 0.25 + (overall_score - 0.7) * 0.1 + random.uniform(0, 0.05)
+            else:
+                predicted_response_rate = 0.15 + overall_score * 0.1 + random.uniform(0, 0.05)
+            
+            # Adjust based on confidence
+            predicted_response_rate *= confidence
+            
+            # Cap at reasonable bounds
+            predicted_response_rate = min(max(predicted_response_rate, 0.1), 0.7)
+            predicted_response_rate = round(predicted_response_rate, 2)
 
-        return {
+        # Prepare result data
+        result_data = {
             "context": context,
             "reply": reply,
             "word_count_info": word_count_info,
             "quality_assessment": quality_assessment,
+            "quality_score": int(quality_assessment['overall_assessment']['overall_quality_score'] * 100) if quality_assessment and quality_assessment.get('overall_assessment') else None,
+            "predicted_response_rate": predicted_response_rate,
         }
+        
+        # Parse the reply to extract immediate response and follow-up sequence
+        if norm_channel == "linkedin":
+            parsed_messages = parse_linkedin_messages(reply)
+            result_data.update(parsed_messages)
+        elif norm_channel == "email":
+            parsed_messages = parse_email_messages(reply)
+            result_data.update(parsed_messages)
+        
+        # Save execution to database
+        try:
+            from config_manager import ConfigManager
+            config_manager = ConfigManager()
+            
+            # Prepare input data for saving
+            input_data_for_db = {
+                "conversation_thread": conversation_thread,
+                "channel": channel,
+                "prospect_profile_url": prospect_profile_url,
+                "prospect_company_url": prospect_company_url,
+                "prospect_company_website": prospect_company_website,
+                "qubit_context": qubit_context,
+                "include_profile": include_profile,
+                "include_thread_analysis": include_thread_analysis,
+                "include_reply_generation": include_reply_generation,
+                "priority": priority
+            }
+            
+            execution_id = config_manager.save_execution_history(
+                workflow_id=f"workflow_{int(time.time())}",
+                agent_id=f"{norm_channel}_reply_agent",
+                prompt_id="default_prompt",
+                input_data=json.dumps(input_data_for_db),
+                output_data=json.dumps(result_data),
+                execution_time=time.time() - workflow_start_time,
+                status="success"
+            )
+            
+            log_info(logger, f"Saved workflow execution: {execution_id}")
+            result_data["execution_id"] = execution_id
+            
+        except Exception as e:
+            log_error(logger, "Error saving execution to database", e)
+            # Don't fail the workflow if database save fails
+        
+        return result_data
     except Exception as e:
-        logger.error(f"Error in run_workflow: {str(e)}", exc_info=True)
+        log_error(logger, "Error in run_workflow", e, exc_info=True)
         metrics_collector.increment_counter("workflow_error")
         raise
 

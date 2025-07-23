@@ -48,5 +48,24 @@ This platform is a smart assistant builder. It lets you create, test, and monito
 5. **You check the dashboard to see how Scout and Lexi performed.**
 6. **You tweak their instructions and try again until you’re happy.**
 
+## Quality Standards for Messages
+
+### LinkedIn Messages
+- **Initial Message**: 80-100 words (automatically enforced)
+- **Follow-ups**: 3 messages, each 75-125 words
+- **Quality Criteria**: Personalization, value proposition, clear call-to-action, professional tone
+
+### Email Messages
+- **No strict word limits** but concise is better
+- **Subject lines required** for all emails
+- **Follow-up timing**: Typically 6-9 days between messages
+- **Additional quality checks**: Clarity and appropriate urgency
+
+### What Makes a High-Quality Message?
+- **Personalized**: References specific details about the recipient
+- **Clear Value**: Explains what benefit you're offering
+- **Action-Oriented**: Has a specific next step
+- **Professional**: Appropriate tone for business communication
+
 ## In Short
-This platform helps you build, test, and monitor smart digital assistants for your business—no deep technical knowledge required! 
+This platform helps you build, test, and monitor smart digital assistants for your business—no deep technical knowledge required! All messages are automatically evaluated for quality to ensure professional, effective communication. 

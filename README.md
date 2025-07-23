@@ -17,6 +17,8 @@ A powerful, production-ready workflow orchestration platform built with CrewAI, 
 - **FAQ Knowledge Base**: Intelligent FAQ agent with semantic search and answer synthesis
 - **Dynamic Quality Evaluation**: Real-time message quality scoring and response rate prediction
 - **Simplified Observability**: In-memory tracking with no external dependencies
+- **Enhanced Message Parsing**: Robust parsing for multiple AI-generated output formats
+- **Word Count Tracking**: Detailed word count limits and tracking for all messages
 
 ### Web Interface
 - **Interactive Dashboard**: Monitor agents, workflows, and system health
@@ -28,11 +30,12 @@ A powerful, production-ready workflow orchestration platform built with CrewAI, 
 - **Run Workflow Page**: Easy-to-use interface for testing workflows
 
 ### Agent Capabilities
-- **LinkedIn Outreach**: Profile analysis and personalized messaging with quality scoring
-- **Email Campaigns**: Multi-step email sequences with follow-ups
+- **LinkedIn Outreach**: Profile analysis and personalized messaging (80-100 words) with quality scoring
+- **Email Campaigns**: Multi-step email sequences with timed follow-ups
 - **Content Generation**: AI-powered content creation with tone matching
 - **FAQ Agent**: Intelligent question answering with semantic search and answer synthesis
 - **Dynamic Evaluation**: Real-time quality assessment of generated content
+- **Follow-up Sequences**: Automated 3-message follow-up sequences with proper timing
 
 ## 📋 Prerequisites
 

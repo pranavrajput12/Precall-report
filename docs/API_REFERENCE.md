@@ -40,7 +40,33 @@ POST /api/workflow/execute
   "output": {
     "message": "Personalized message content...",
     "quality_score": 85,
-    "predicted_response_rate": 0.35
+    "predicted_response_rate": 0.35,
+    "immediate_response": {
+      "message": "Hi [Name], I noticed your company...",
+      "word_count": 95
+    },
+    "follow_up_sequence": [
+      {
+        "timing": "3 days later",
+        "subject": "Quick follow-up on [topic]",
+        "message": "Hope you had a chance to review...",
+        "word_count": 87
+      }
+    ],
+    "word_count_info": {
+      "immediate_response": 95,
+      "follow_ups": [87, 92, 89],
+      "total": 363
+    },
+    "quality_assessment": {
+      "score": 85,
+      "criteria": {
+        "personalization": 90,
+        "value_proposition": 85,
+        "call_to_action": 80,
+        "tone": 85
+      }
+    }
   },
   "duration": 12.5
 }
@@ -82,8 +108,31 @@ GET /api/execution-history
       "status": "completed",
       "started_at": "2025-01-22T10:30:00Z",
       "duration": 12.5,
-      "input_data": {...},
-      "output": {...}
+      "input_data": {
+        "channel": "LinkedIn",
+        "prospect_company_url": "https://example.com",
+        "personalization_data": {
+          "explicit_questions": ["What is your pricing?"],
+          "implicit_needs": ["scalability", "integration"]
+        }
+      },
+      "output": {
+        "immediate_response": {
+          "message": "Hi [Name], I noticed your company...",
+          "word_count": 95
+        },
+        "follow_up_sequence": [
+          {
+            "timing": "3 days later",
+            "subject": "Quick follow-up",
+            "message": "Hope you had a chance to review...",
+            "word_count": 87
+          }
+        ],
+        "quality_score": 85,
+        "predicted_response_rate": 0.35,
+        "channel": "linkedin"
+      }
     }
   ]
 }
@@ -340,5 +389,73 @@ GET /api/health
   "version": "1.0.0",
   "redis": "connected",
   "database": "connected"
+}
+```
+
+## Output Format Documentation
+
+### LinkedIn Message Format
+```json
+{
+  "immediate_response": {
+    "message": "Message content (80-100 words)",
+    "word_count": 95
+  },
+  "follow_up_sequence": [
+    {
+      "timing": "3 days later",
+      "message": "Follow-up content (75-125 words)",
+      "word_count": 110
+    }
+  ],
+  "word_count_info": {
+    "immediate_response": 95,
+    "follow_ups": [110, 98, 102],
+    "total": 405
+  }
+}
+```
+
+### Email Message Format
+```json
+{
+  "immediate_response": {
+    "subject": "Email subject line",
+    "message": "Email body content",
+    "word_count": 150
+  },
+  "follow_up_sequence": [
+    {
+      "timing": "6 days later",
+      "subject": "Follow-up subject",
+      "message": "Follow-up body",
+      "word_count": 120
+    }
+  ],
+  "parsed_messages": [
+    {
+      "subject": "Subject line",
+      "body": "Full email body text",
+      "timing": "immediate"
+    }
+  ]
+}
+```
+
+### Quality Assessment Structure
+```json
+{
+  "quality_assessment": {
+    "score": 85,
+    "criteria": {
+      "personalization": 90,
+      "value_proposition": 85,
+      "call_to_action": 80,
+      "tone": 85,
+      "clarity": 88,
+      "urgency": 75
+    },
+    "feedback": "Message effectively personalizes the approach..."
+  }
 }
 ```

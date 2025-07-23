@@ -21,9 +21,9 @@ const fetchAllRuns = async () => {
   if (!response.ok) throw new Error('Failed to fetch execution history');
   const data = await response.json();
   console.log('Fetched runs:', data);
-  console.log('Total executions received:', data.executions?.length);
-  console.log('Execution IDs:', data.executions?.map(e => e.id));
-  return data.executions || [];
+  console.log('Total executions received:', data.items?.length);
+  console.log('Execution IDs:', data.items?.map(e => e.id));
+  return data.items || [];
 };
 
 const AllRuns = () => {
@@ -73,7 +73,12 @@ const AllRuns = () => {
       .filter(run => run.output?.message)
       .map(run => {
         let messageText = `--- ${run.id} (${new Date(run.started_at).toLocaleString()}) ---\n`;
-        messageText += `IMMEDIATE RESPONSE:\n${run.output.immediate_response || run.output.message}\n`;
+        // Handle immediate_response object format
+        let immediateText = run.output.immediate_response || run.output.message;
+        if (typeof immediateText === 'object' && immediateText?.message) {
+          immediateText = immediateText.message;
+        }
+        messageText += `IMMEDIATE RESPONSE:\n${immediateText}\n`;
         
         if (run.output.follow_up_sequence && run.output.follow_up_sequence.length > 0) {
           messageText += '\nFOLLOW-UP SEQUENCE:\n';
@@ -99,7 +104,13 @@ const AllRuns = () => {
       run.duration ? `${run.duration.toFixed(1)}s` : 'N/A',
       run.input_data?.prospect_company_url || '',
       run.output?.quality_score || '',
-      (run.output?.immediate_response || run.output?.message || '').replace(/\n/g, ' '),
+      (() => {
+        let immediateText = run.output?.immediate_response || run.output?.message || '';
+        if (typeof immediateText === 'object' && immediateText?.message) {
+          immediateText = immediateText.message;
+        }
+        return immediateText.toString().replace(/\n/g, ' ');
+      })(),
       run.output?.follow_up_sequence?.[0]?.message?.replace(/\n/g, ' ') || '',
       run.output?.follow_up_sequence?.[1]?.message?.replace(/\n/g, ' ') || '',
       run.output?.follow_up_sequence?.[2]?.message?.replace(/\n/g, ' ') || ''
@@ -341,50 +352,191 @@ const AllRuns = () => {
               {expandedRuns[run.id] && (
                 <div className="border-t">
                   <div className="p-4 bg-gray-50">
-                    <h4 className="font-medium text-gray-900 mb-2">Input Data</h4>
-                    <div className="grid grid-cols-2 gap-2 text-sm">
-                      <div>
-                        <span className="text-gray-600">Channel:</span>
-                        <span className="ml-2 font-medium">{run.input_data?.channel}</span>
+                    <h4 className="font-medium text-gray-900 mb-3">Input Data</h4>
+                    <div className="space-y-3 text-sm">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <span className="text-gray-600 font-medium">Channel:</span>
+                          <span className="ml-2">{run.input_data?.channel}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600 font-medium">Executed By:</span>
+                          <span className="ml-2">{run.input_data?._executed_by || 'System'}</span>
+                        </div>
                       </div>
-                      <div>
-                        <span className="text-gray-600">Company:</span>
-                        <span className="ml-2 font-medium text-blue-600 hover:underline">
-                          <a href={run.input_data?.prospect_company_url} target="_blank" rel="noopener noreferrer">
-                            {run.input_data?.prospect_company_url}
+                      
+                      {run.input_data?.prospect_profile_url && (
+                        <div>
+                          <span className="text-gray-600 font-medium">Prospect Profile:</span>
+                          <a href={run.input_data.prospect_profile_url} target="_blank" rel="noopener noreferrer" 
+                             className="ml-2 text-blue-600 hover:underline break-all">
+                            {run.input_data.prospect_profile_url}
                           </a>
-                        </span>
-                      </div>
+                        </div>
+                      )}
+                      
+                      {run.input_data?.prospect_company_url && (
+                        <div>
+                          <span className="text-gray-600 font-medium">Company:</span>
+                          <a href={run.input_data.prospect_company_url} target="_blank" rel="noopener noreferrer" 
+                             className="ml-2 text-blue-600 hover:underline break-all">
+                            {run.input_data.prospect_company_url}
+                          </a>
+                        </div>
+                      )}
+                      
+                      {run.input_data?.prospect_company_website && (
+                        <div>
+                          <span className="text-gray-600 font-medium">Company Website:</span>
+                          <a href={`https://${run.input_data.prospect_company_website.replace(/^https?:\/\//, '')}`} 
+                             target="_blank" rel="noopener noreferrer" 
+                             className="ml-2 text-blue-600 hover:underline">
+                            {run.input_data.prospect_company_website}
+                          </a>
+                        </div>
+                      )}
+                      
+                      {run.input_data?.conversation_thread && (
+                        <div>
+                          <span className="text-gray-600 font-medium">Conversation Thread:</span>
+                          <div className="mt-1 p-3 bg-white border rounded-lg">
+                            <pre className="whitespace-pre-wrap text-sm text-gray-800 font-sans">
+                              {run.input_data.conversation_thread}
+                            </pre>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {run.input_data?.personalization_data && (
+                        <div>
+                          <span className="text-gray-600 font-medium">Personalization Data:</span>
+                          <div className="mt-1 p-3 bg-white border rounded-lg">
+                            {run.input_data.personalization_data.explicit_questions?.length > 0 && (
+                              <div className="mb-2">
+                                <span className="text-xs font-medium text-gray-500">Explicit Questions:</span>
+                                <ul className="list-disc list-inside text-sm text-gray-700 mt-1">
+                                  {run.input_data.personalization_data.explicit_questions.map((q, i) => (
+                                    <li key={i}>{q}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                            {run.input_data.personalization_data.implicit_needs?.length > 0 && (
+                              <div>
+                                <span className="text-xs font-medium text-gray-500">Implicit Needs:</span>
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                  {run.input_data.personalization_data.implicit_needs.map((need, i) => (
+                                    <span key={i} className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">
+                                      {need}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 
-                  {run.output?.message && (
+                  {(run.output?.message || run.output?.reply || run.output?.immediate_response) && (
                     <div className="p-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="font-medium text-gray-900">Immediate Response</h4>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            copyMessage(run.output.immediate_response || run.output.message);
-                          }}
-                          className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg text-sm flex items-center gap-1 transition-colors"
-                        >
-                          <Copy className="w-3 h-3" />
-                          Copy Immediate
-                        </button>
-                      </div>
-                      <div className="bg-white border rounded-lg p-4">
-                        <pre className="whitespace-pre-wrap text-sm text-gray-800 font-sans">
-                          {run.output.immediate_response || run.output.message}
-                        </pre>
-                      </div>
-                      
-                      {/* Follow-up Sequence */}
-                      {run.output.follow_up_sequence && run.output.follow_up_sequence.length > 0 && (
-                        <div className="mt-4">
-                          <h4 className="font-medium text-gray-900 mb-3">Follow-up Sequence</h4>
-                          <div className="space-y-3">
-                            {run.output.follow_up_sequence.map((followup, index) => (
+                      {(() => {
+                        // Parse the output to extract immediate response and follow-ups
+                        let immediateResponse = '';
+                        let followUpSequence = [];
+                        let qualityScore = null;
+                        let predictedResponseRate = null;
+                        
+                        // Handle different output formats
+                        if (run.output.immediate_response) {
+                           // Old format (Lucas Wright style) - handle both string and object formats
+                           if (typeof run.output.immediate_response === 'string') {
+                             immediateResponse = run.output.immediate_response;
+                           } else if (run.output.immediate_response && run.output.immediate_response.message) {
+                             immediateResponse = run.output.immediate_response.message;
+                           } else {
+                             immediateResponse = JSON.stringify(run.output.immediate_response);
+                           }
+                          followUpSequence = run.output.follow_up_sequence || [];
+                          qualityScore = run.output.quality_score;
+                          predictedResponseRate = run.output.predicted_response_rate;
+                        } else if (run.output.reply) {
+                          // New format - parse markdown structure
+                          const replyText = run.output.reply;
+                          
+                          // Extract immediate response
+                          const immediateMatch = replyText.match(/## IMMEDIATE RESPONSE\s*([\s\S]*?)(?=##|$)/);
+                          if (immediateMatch) {
+                            immediateResponse = immediateMatch[1].replace(/\[Word Count:.*?\]/g, '').trim();
+                          }
+                          
+                          // Extract follow-ups
+                          const followUpMatches = replyText.matchAll(/### Follow-up (\d+) \(([^)]+)\)\s*([\s\S]*?)(?=###|##|$)/g);
+                          followUpSequence = Array.from(followUpMatches).map(match => {
+                            const message = match[3].replace(/\[Word Count:.*?\]/g, '').trim();
+                            const wordCountMatch = match[3].match(/\[Word Count: (\d+) words\]/);
+                            return {
+                              timing: match[2],
+                              message: message,
+                              word_count: wordCountMatch ? parseInt(wordCountMatch[1]) : null
+                            };
+                          });
+                          
+                          // Extract quality info from quality_assessment if available
+                          if (run.output.quality_assessment) {
+                            // Handle nested quality assessment structure
+                            const assessment = run.output.quality_assessment;
+                            const overallAssessment = assessment.overall_assessment;
+                            
+                            if (overallAssessment && overallAssessment.overall_quality_score) {
+                              // Convert from 0-1 scale to percentage
+                              qualityScore = Math.round(overallAssessment.overall_quality_score * 100);
+                            } else if (assessment.overall_score) {
+                              qualityScore = assessment.overall_score;
+                            } else if (assessment.quality_score) {
+                              qualityScore = assessment.quality_score;
+                            }
+                            
+                            // Look for predicted response rate in various locations
+                            predictedResponseRate = overallAssessment?.predicted_response_rate || 
+                                                  assessment.predicted_response_rate || 
+                                                  overallAssessment?.confidence_score || 
+                                                  null;
+                          }
+                        } else {
+                          // Fallback to message
+                          immediateResponse = run.output.message;
+                        }
+                        
+                        return (
+                          <>
+                            {/* Immediate Response */}
+                            <div className="flex items-center justify-between mb-2">
+                              <h4 className="font-medium text-gray-900">Immediate Response</h4>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  copyMessage(immediateResponse);
+                                }}
+                                className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg text-sm flex items-center gap-1 transition-colors"
+                              >
+                                <Copy className="w-3 h-3" />
+                                Copy Immediate
+                              </button>
+                            </div>
+                            <div className="bg-white border rounded-lg p-4">
+                              <pre className="whitespace-pre-wrap text-sm text-gray-800 font-sans">
+                                {immediateResponse}
+                              </pre>
+                            </div>
+                            
+                            {/* Follow-up Sequence */}
+                            {followUpSequence && followUpSequence.length > 0 && (
+                              <div className="mt-4">
+                                <h4 className="font-medium text-gray-900 mb-3">Follow-up Sequence</h4>
+                                <div className="space-y-3">
+                                  {followUpSequence.map((followup, index) => (
                               <div key={index} className="bg-gray-50 border rounded-lg p-4">
                                 <div className="flex items-center justify-between mb-2">
                                   <div>
@@ -410,42 +562,54 @@ const AllRuns = () => {
                             ))}
                           </div>
                           
-                          {/* Copy All Messages Button */}
-                          <div className="mt-3 flex justify-end">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                const allMessages = [
-                                  `IMMEDIATE RESPONSE:\n${run.output.immediate_response || run.output.message}`,
-                                  ...run.output.follow_up_sequence.map((f, i) => 
-                                    `\nFOLLOW-UP ${i + 1} (${f.timing}):\n${f.message}`
-                                  )
-                                ].join('\n\n---\n\n');
-                                navigator.clipboard.writeText(allMessages);
-                                toast.success('Copied all messages!');
-                              }}
+                                {/* Copy All Messages Button */}
+                                <div className="mt-3 flex justify-end">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const allMessages = [
+                                        `IMMEDIATE RESPONSE:\n${immediateResponse}`,
+                                        ...followUpSequence.map((f, i) => 
+                                          `\nFOLLOW-UP ${i + 1} (${f.timing}):\n${f.message}`
+                                        )
+                                      ].join('\n\n---\n\n');
+                                      navigator.clipboard.writeText(allMessages);
+                                      toast.success('Copied all messages!');
+                                    }}
                               className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-lg text-sm flex items-center gap-1 transition-colors"
                             >
                               <Copy className="w-3 h-3" />
-                              Copy All Messages
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                      
-                      {/* Metrics */}
-                      <div className="mt-4 grid grid-cols-2 gap-4">
-                        <div className="bg-blue-50 rounded-lg p-3">
-                          <p className="text-sm text-gray-600">Quality Score</p>
-                          <p className="text-xl font-bold text-blue-600">{run.output.quality_score}%</p>
-                        </div>
-                        <div className="bg-green-50 rounded-lg p-3">
-                          <p className="text-sm text-gray-600">Predicted Response Rate</p>
-                          <p className="text-xl font-bold text-green-600">
-                            {(run.output.predicted_response_rate * 100).toFixed(0)}%
-                          </p>
-                        </div>
-                      </div>
+                                    Copy All Messages
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                            
+                            {/* Metrics */}
+                            {(qualityScore !== null || predictedResponseRate !== null) && (
+                              <div className="mt-4 grid grid-cols-2 gap-4">
+                                {qualityScore !== null && (
+                                  <div className="bg-blue-50 rounded-lg p-3">
+                                    <p className="text-sm text-gray-600">Quality Score</p>
+                                    <p className="text-xl font-bold text-blue-600">{qualityScore}%</p>
+                                  </div>
+                                )}
+                                {predictedResponseRate !== null && (
+                                  <div className="bg-green-50 rounded-lg p-3">
+                                    <p className="text-sm text-gray-600">Predicted Response Rate</p>
+                                    <p className="text-xl font-bold text-green-600">
+                                      {predictedResponseRate < 1 ? 
+                                        (predictedResponseRate * 100).toFixed(0) + '%' : 
+                                        predictedResponseRate + '%'
+                                      }
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
                   )}
 
