@@ -14,9 +14,23 @@ openai==1.23.2  # Updated to latest version
 # Database and Caching
 redis==5.0.1
 sqlalchemy==2.0.23
+psycopg2-binary==2.9.9  # PostgreSQL adapter
+alembic==1.13.1  # Database migrations
 
 # Task Queue
 celery==5.3.4
+
+# Monitoring and Observability
+sentry-sdk[fastapi]==1.40.6
+opentelemetry-api==1.21.0
+opentelemetry-sdk==1.21.0
+opentelemetry-instrumentation-fastapi==0.42b0
+opentelemetry-instrumentation-redis==0.42b0
+opentelemetry-instrumentation-sqlalchemy==0.42b0
+opentelemetry-instrumentation-requests==0.42b0
+opentelemetry-exporter-jaeger-thrift==1.21.0
+opentelemetry-exporter-otlp==1.21.0
+opentelemetry-exporter-prometheus==1.12.0rc1
 
 # Monitoring and Logging
 sentry-sdk==1.38.0

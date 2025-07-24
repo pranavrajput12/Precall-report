@@ -460,10 +460,17 @@ async def test_agent(agent_id: str, request: TestRequest):
             agent=agent,
             expected_output="Test output")
 
-        # Execute task and measure time
+        # Execute task using CrewAI Crew and measure time
         start_time = time.time()
         try:
-            result = task.execute()
+            from crewai import Crew
+            crew = Crew(
+                agents=[agent],
+                tasks=[task],
+                verbose=False
+            )
+            crew_output = crew.kickoff()
+            result = str(crew_output.raw)  # Extract the actual output text
             execution_time = time.time() - start_time
             status = "success"
             error_message = ""

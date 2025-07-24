@@ -1,0 +1,14 @@
+{
+  "workflow_id": "default_workflow",
+  "input_data": {
+    "channel": "Email",
+    "conversation_thread": "What is your fee structure Le jeu. 22 mai 2025 à 10:11, Chloe Boon chloe.boon@startupseedcapital.com a écrit : Hi Cedric,\n\nI noticed Cerhum's impressive milestone of treating over 100 patients with your patented MyBone® Custom grafts—congratulations on this rapid growth.\n\nGiven your focus on expanding beyond Europe and navigating complex regulatory paths, I thought Qubit's AI-powered investor matchmaking and end-to-end fundraising support might ease your capital raise and commercialization efforts.\n\nWould you be open to a brief chat on how this aligns with your current fundraising approach?\n\nLooking forward to your thoughts.\n\nLet's Grow Together ! Chloe Boon Venture Scout Qubit Capital",
+    "client_linkedin": "https://www.linkedin.com/in/cedricconstant/",
+    "company_website": "http://www.cerhum.com",
+    "company_linkedin": "https://www.linkedin.com/company/cerhum/",
+    "personalization_data": {
+      "explicit_questions": ["fee structure", "brief chat on fundraising approach"],
+      "implicit_needs": ["fundraising support", "capital raise assistance", "regulatory guidance"]
+    }
+  }
+}

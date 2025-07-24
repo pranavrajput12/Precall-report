@@ -19,7 +19,9 @@ import toast from 'react-hot-toast';
 const fetchFAQs = async () => {
   const response = await fetch('/api/faq');
   if (!response.ok) throw new Error('Failed to fetch FAQs');
-  return response.json();
+  const data = await response.json();
+  // Handle paginated response - extract items array
+  return data.items || data;
 };
 
 const KnowledgeBase = () => {

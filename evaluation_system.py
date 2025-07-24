@@ -41,6 +41,7 @@ except (ImportError, Exception):
     pass
 
 # Local imports
+from logging_config import log_info, log_error, log_warning, log_debug
 
 logger = logging.getLogger(__name__)
 
@@ -107,14 +108,31 @@ class EvaluationSystem:
             self._load_rubrics()
 
             self.is_initialized = True
-            logger.info("Evaluation system initialized successfully")
+            log_info(logger, "Evaluation system initialized successfully")
         except Exception as e:
-            logger.error(f"Failed to initialize evaluation system: {e}")
+            log_error(logger, "Failed to initialize evaluation system", e)
 
     def _setup_prometheus(self):
-        """Setup Prometheus evaluator"""
+        """
+        Setup Prometheus evaluator for response quality assessment.
+        
+        This method configures the Prometheus evaluation system, which provides
+        high-quality LLM-based evaluation of responses. It handles several scenarios:
+        
+        1. If Prometheus is not available, falls back to simple evaluation
+        2. If a local model path is specified and VLLM is available, uses local inference
+        3. If an OpenAI API key is available, uses GPT-4 for evaluation
+        4. Otherwise, falls back to a Hugging Face hosted model
+        
+        The configuration uses environment variables:
+        - PROMETHEUS_MODEL_PATH: Path to local Prometheus model
+        - OPENAI_API_KEY: API key for OpenAI services
+        
+        Returns:
+            None
+        """
         if not PROMETHEUS_AVAILABLE:
-            logger.warning(
+            log_warning(logger,
                 "Prometheus-Eval not available, using simple evaluation")
             self.prometheus_judge = None
             return
@@ -127,18 +145,18 @@ class EvaluationSystem:
 
             if VLLM_AVAILABLE and os.path.exists(model_path):
                 model = VLLM(model=model_path)
-                logger.info(f"Using local Prometheus model: {model_path}")
+                log_info(logger, f"Using local Prometheus model: {model_path}")
             else:
                 # Fallback to API-based model
                 api_key = os.getenv("OPENAI_API_KEY")
                 if api_key:
                     model = LiteLLM("gpt-4-turbo", api_key=api_key)
-                    logger.info("Using GPT-4 for evaluation")
+                    log_info(logger, "Using GPT-4 for evaluation")
                 else:
                     # Use Hugging Face endpoint
                     model = LiteLLM(
                         "huggingface/prometheus-eval/prometheus-7b-v2.0")
-                    logger.info("Using Hugging Face Prometheus model")
+                    log_info(logger, "Using Hugging Face Prometheus model")
 
             self.prometheus_judge = PrometheusEval(
                 model=model,
@@ -147,7 +165,7 @@ class EvaluationSystem:
             )
 
         except Exception as e:
-            logger.error(f"Failed to setup Prometheus: {e}")
+            log_error(logger, "Failed to setup Prometheus", e)
             # Fallback to simple evaluation
             self.prometheus_judge = None
 
@@ -280,7 +298,7 @@ class EvaluationSystem:
                 return result
 
         except Exception as e:
-            logger.error(f"Evaluation failed: {e}")
+            log_error(logger, "Evaluation failed", e)
             execution_time = time.time() - start_time
 
             return EvaluationResult(
@@ -365,7 +383,7 @@ class EvaluationSystem:
                 return result
 
         except Exception as e:
-            logger.error(f"Relative evaluation failed: {e}")
+            log_error(logger, "Relative evaluation failed", e)
             execution_time = time.time() - start_time
 
             return EvaluationResult(
@@ -443,7 +461,7 @@ class EvaluationSystem:
                 )
 
         except Exception as e:
-            logger.error(f"Batch evaluation failed: {e}")
+            log_error(logger, "Batch evaluation failed", e)
             return EvaluationBatch(
                 results=[],
                 aggregate_score=0.0,
@@ -517,24 +535,52 @@ class EvaluationSystem:
         return feedback, winner, 0.3  # Low confidence
 
     def get_evaluation_summary(self, limit: int = 100) -> Dict[str, Any]:
-        """Get summary of recent evaluations"""
+        """Get summary of recent evaluations from both in-memory and database"""
+        # Get in-memory results
         recent_results = self.evaluation_history[-limit:]
+        
+        # Get results from database as backup/supplement
+        try:
+            from database import get_database_manager
+            db_manager = get_database_manager()
+            db_evaluations = db_manager.get_evaluation_history(limit)
+            
+            # Convert database records to EvaluationResult-like objects for consistency
+            if db_evaluations and not recent_results:
+                # If no in-memory results but database has results, use database data
+                recent_results = []
+                for eval_record in db_evaluations:
+                    # Create pseudo-EvaluationResult for compatibility
+                    class DatabaseEvaluation:
+                        def __init__(self, record):
+                            self.metric = type('Metric', (), {'value': 'quality'})()  # Default metric
+                            self.score = record.get('quality_score', 0) / 100.0 if record.get('quality_score') else 0  # Convert to 0-1 scale
+                            self.confidence = 0.8  # Default confidence
+                            self.execution_time = 0.1  # Default execution time
+                            self.evaluator = record.get('evaluated_by', 'database')
+                            self.timestamp = record.get('timestamp') or record.get('created_at')
+                    
+                    recent_results.append(DatabaseEvaluation(eval_record))
+                    
+        except Exception as e:
+            # If database access fails, continue with in-memory only
+            log_warning(logger, f"Failed to load evaluation data from database: {e}")
 
         if not recent_results:
             return {"message": "No evaluation results available"}
 
         # Calculate statistics
         total_evaluations = len(recent_results)
-        avg_score = (sum(r.score for r in recent_results if isinstance(
-            r.score, (int, float))) / total_evaluations)
+        numeric_scores = [r.score for r in recent_results if isinstance(r.score, (int, float))]
+        avg_score = sum(numeric_scores) / len(numeric_scores) if numeric_scores else 0
         avg_execution_time = (
-            sum(r.execution_time for r in recent_results) / total_evaluations
+            sum(r.execution_time for r in recent_results if hasattr(r, 'execution_time')) / total_evaluations
         )
 
         # Group by metric
         metric_stats = {}
         for result in recent_results:
-            metric = result.metric.value
+            metric = getattr(result.metric, 'value', 'quality')
             if metric not in metric_stats:
                 metric_stats[metric] = {
                     "count": 0, "avg_score": 0, "scores": []}
@@ -543,24 +589,34 @@ class EvaluationSystem:
             if isinstance(result.score, (int, float)):
                 metric_stats[metric]["scores"].append(result.score)
 
-        # Calculate averages
+        # Calculate averages and statistics
         for metric, stats in metric_stats.items():
             if stats["scores"]:
-                stats["avg_score"] = sum(
-                    stats["scores"]) / len(stats["scores"])
+                scores = stats["scores"]
+                stats["avg"] = sum(scores) / len(scores)
+                stats["min"] = min(scores)
+                stats["max"] = max(scores)
+                # Remove the raw scores from the response
+                del stats["scores"]
+        
+        # Calculate success rate (scores >= 0.6 are considered successful for 0-1 scale)
+        successful_evals = sum(1 for r in recent_results 
+                             if isinstance(r.score, (int, float)) and r.score >= 0.6)
+        success_rate = successful_evals / total_evaluations if total_evaluations > 0 else 0
 
         return {
             "total_evaluations": total_evaluations,
             "average_score": avg_score,
             "average_execution_time": avg_execution_time,
+            "success_rate": success_rate,
             "metric_statistics": metric_stats,
             "recent_results": [
                 {
-                    "metric": r.metric.value,
+                    "metric": getattr(r.metric, 'value', 'quality'),
                     "score": r.score,
-                    "confidence": r.confidence,
-                    "evaluator": r.evaluator,
-                    "timestamp": r.timestamp.isoformat(),
+                    "confidence": getattr(r, 'confidence', 0.8),
+                    "evaluator": getattr(r, 'evaluator', 'system'),
+                    "timestamp": r.timestamp.isoformat() if hasattr(r.timestamp, 'isoformat') else str(r.timestamp),
                 }
                 for r in recent_results[-10:]  # Last 10 results
             ],

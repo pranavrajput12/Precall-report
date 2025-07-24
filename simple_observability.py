@@ -137,6 +137,54 @@ class SimpleObservability:
         stats = self.get_performance_stats()
         recent = self.get_recent_workflows()
         
+        # If no in-memory traces, try to load from database
+        if not recent or stats.total_executions == 0:
+            try:
+                from database import get_database_manager
+                db_manager = get_database_manager()
+                db_history = db_manager.get_observability_history(limit=10)
+                
+                if db_history:
+                    # Convert database records to trace format
+                    db_traces = []
+                    total_db_executions = 0
+                    total_duration = 0
+                    successful_executions = 0
+                    
+                    for record in db_history:
+                        # Convert to trace format expected by frontend
+                        trace = {
+                            "workflow_id": record.get('execution_id', ''),
+                            "workflow_name": record.get('workflow_id', '').replace('_', ' ').title(),
+                            "duration": record.get('duration_ms', 0) / 1000.0,  # Convert ms to seconds
+                            "status": "completed" if record.get('error_count', 0) == 0 else "failed",
+                            "timestamp": record.get('timestamp', record.get('created_at', '')).isoformat() if hasattr(record.get('timestamp', record.get('created_at', '')), 'isoformat') else str(record.get('timestamp', record.get('created_at', '')))
+                        }
+                        db_traces.append(trace)
+                        total_db_executions += 1
+                        total_duration += trace['duration']
+                        if trace['status'] == 'completed':
+                            successful_executions += 1
+                    
+                    # Calculate metrics from database data
+                    avg_duration = total_duration / total_db_executions if total_db_executions > 0 else 0
+                    success_rate = (successful_executions / total_db_executions * 100) if total_db_executions > 0 else 0
+                    
+                    return {
+                        "total_traces": total_db_executions,
+                        "recent_traces": db_traces,
+                        "timestamp": datetime.now().isoformat(),
+                        "performance": {
+                            "average_duration": avg_duration,
+                            "success_rate": success_rate,
+                            "total_executions": total_db_executions
+                        },
+                        "active_workflows": len(self.metrics)
+                    }
+            except Exception as e:
+                logger.warning(f"Failed to load observability data from database: {e}")
+        
+        # Return in-memory data
         return {
             "total_traces": stats.total_executions,
             "recent_traces": [

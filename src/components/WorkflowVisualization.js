@@ -16,12 +16,14 @@ import toast from 'react-hot-toast';
 const WorkflowVisualization = ({ agents = [], onNodeClick, onNodeDoubleClick }) => {
   // Create nodes from agents
   const initialNodes = useMemo(() => {
+    if (!agents || agents.length === 0) return [];
+    
     const nodeSpacing = 200;
     const startX = 100;
     const startY = 100;
     
     return agents.map((agent, index) => ({
-      id: agent.id,
+      id: agent.id || `agent-${index}`,
       type: 'default',
       position: { 
         x: startX + (index % 3) * nodeSpacing, 
@@ -30,8 +32,8 @@ const WorkflowVisualization = ({ agents = [], onNodeClick, onNodeDoubleClick }) 
       data: { 
         label: (
           <div className="agent-node">
-            <div className="agent-title">{agent.name}</div>
-            <div className="agent-role">{agent.role}</div>
+            <div className="agent-title">{agent.name || 'Unnamed Agent'}</div>
+            <div className="agent-role">{agent.role || 'No role defined'}</div>
             <div className="agent-status">
               <span className={`status-indicator ${agent.status || 'ready'}`}></span>
               {agent.status || 'Ready'}
@@ -55,14 +57,19 @@ const WorkflowVisualization = ({ agents = [], onNodeClick, onNodeDoubleClick }) 
 
   // Create edges based on agent dependencies
   const initialEdges = useMemo(() => {
+    if (!agents || agents.length === 0) return [];
+    
     const edges = [];
     agents.forEach((agent, index) => {
       // Create connections based on agent order (simple sequential flow)
-      if (index > 0) {
+      if (index > 0 && agents[index - 1] && agent) {
+        const sourceId = agents[index - 1].id || `agent-${index - 1}`;
+        const targetId = agent.id || `agent-${index}`;
+        
         edges.push({
-          id: `${agents[index - 1].id}-${agent.id}`,
-          source: agents[index - 1].id,
-          target: agent.id,
+          id: `${sourceId}-${targetId}`,
+          source: sourceId,
+          target: targetId,
           type: 'smoothstep',
           animated: true,
           style: {

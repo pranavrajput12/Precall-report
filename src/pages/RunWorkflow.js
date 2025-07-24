@@ -1,8 +1,12 @@
 import React, { useState } from 'react';
 import { Send, Loader, CheckCircle, AlertCircle, FileText, Sparkles } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
 const RunWorkflow = () => {
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [inputs, setInputs] = useState({
@@ -53,6 +57,13 @@ const RunWorkflow = () => {
 
       const data = await response.json();
       setResult(data);
+      
+      // Invalidate React Query caches to refresh data across pages
+      queryClient.invalidateQueries({ queryKey: ['all-runs'] });
+      queryClient.invalidateQueries({ queryKey: ['performance-metrics'] });
+      queryClient.invalidateQueries({ queryKey: ['agent-performance'] });
+      queryClient.invalidateQueries({ queryKey: ['system-performance'] });
+      
       toast.success('Workflow completed successfully!');
     } catch (error) {
       toast.error(error.message);
@@ -295,13 +306,21 @@ const RunWorkflow = () => {
             )}
 
             {/* View Full Details */}
-            <div className="mt-4 pt-4 border-t border-gray-200">
+            <div className="mt-4 pt-4 border-t border-gray-200 flex items-center justify-between">
               <button
                 onClick={() => console.log('Full result:', result)}
                 className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
               >
                 <FileText className="w-4 h-4" />
                 View Full Response in Console
+              </button>
+              
+              <button
+                onClick={() => navigate('/all-runs')}
+                className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 flex items-center gap-2"
+              >
+                <CheckCircle className="w-4 h-4" />
+                View All Runs
               </button>
             </div>
           </div>

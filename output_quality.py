@@ -11,6 +11,9 @@ import re
 from datetime import datetime
 from typing import Any, Dict, List
 
+from config_system import config_system
+from logging_config import log_info, log_debug
+
 logger = logging.getLogger(__name__)
 
 
@@ -18,12 +21,22 @@ class OutputQualityAssessor:
     """Comprehensive quality assessment for workflow outputs"""
 
     def __init__(self):
+        """
+        Initialize the quality assessor with thresholds from configuration system.
+        
+        Thresholds are loaded from config with fallbacks to default values.
+        """
+        # Load quality thresholds from configuration system
+        quality_config = config_system.get("quality.thresholds", {})
+        
         self.quality_thresholds = {
-            "excellent": 0.85,
-            "good": 0.70,
-            "acceptable": 0.55,
-            "poor": 0.40,
+            "excellent": quality_config.get("excellent", 0.85),
+            "good": quality_config.get("good", 0.70),
+            "acceptable": quality_config.get("acceptable", 0.55),
+            "poor": quality_config.get("poor", 0.40),
         }
+        
+        log_debug(logger, f"Initialized quality thresholds: {self.quality_thresholds}")
 
     def assess_profile_quality(self, profile_summary: str) -> Dict[str, Any]:
         """Assess the quality of profile enrichment output"""

@@ -15,7 +15,6 @@ import {
   Eye,
   BarChart3,
   ListChecks,
-  History,
   BookOpen,
   List
 } from 'lucide-react';
@@ -76,12 +75,6 @@ const navigationItems = [
     href: '/evals',
     icon: BarChart3,
     description: 'LLM output evaluation and feedback'
-  },
-  {
-    name: 'History',
-    href: '/history',
-    icon: History,
-    description: 'Execution history & test results'
   },
   {
     name: 'All Runs',

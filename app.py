@@ -10,8 +10,8 @@ import sentry_sdk
 import uvicorn
 from celery.result import AsyncResult
 
-# Set up logging
-logging.basicConfig(level=logging.INFO)
+# Import standardized logging configuration
+from logging_config import log_info, log_error, log_warning, log_debug
 logger = logging.getLogger(__name__)
 from fastapi import (FastAPI, File, Query, Request, UploadFile, WebSocket, WebSocketDisconnect, Depends, HTTPException, status)
 from fastapi.middleware.cors import CORSMiddleware
@@ -25,7 +25,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
 from config_api import config_app
-from config_manager import config_manager
+from config_system import config_system
 # Import enhanced systems
 from evaluation_system import evaluation_system
 # from observability import observability_manager
@@ -38,6 +38,18 @@ from faq_agent import faq_agent
 from workflow_executor import workflow_executor
 from auth import auth_manager, get_current_user, require_auth, require_admin, authenticate_user, ENABLE_AUTH
 from agents import llm
+from error_handling import (
+    AppError, ValidationError, NotFoundError, AuthenticationError,
+    AuthorizationError, ConfigurationError, ExternalServiceError,
+    error_handler, error_handling_middleware, with_error_handling
+)
+from execution_manager import execution_manager
+from validation import (
+    validate_workflow_request, validate_profile_enrichment,
+    validate_thread_analysis, validate_reply_generation,
+    validate_request_data
+)
+from pagination import pagination_params, Paginator
 
 # Add this near the top of the file, after the imports
 import json
@@ -48,6 +60,7 @@ from typing import Dict, List, Optional
 # Global execution history storage
 execution_history: List[Dict] = []
 execution_counter = 1
+execution_counter_lock = asyncio.Lock()
 
 def save_execution_history():
     """Save execution history to file"""
@@ -83,37 +96,110 @@ if execution_history:
             except:
                 pass
     execution_counter = max_id + 1
-    logger.info(f"Initialized execution counter to {execution_counter} based on existing history")
+    log_info(logger, f"Initialized execution counter to {execution_counter} based on existing history")
+
+async def get_next_execution_id():
+    """Get the next execution ID in a thread-safe manner"""
+    global execution_counter
+    async with execution_counter_lock:
+        # Check database for latest ID
+        try:
+            from database import get_database_manager
+            db_manager = get_database_manager()
+            latest_records = db_manager.get_execution_history(limit=1)
+            if latest_records:
+                latest_id = latest_records[0]['id']
+                if latest_id.startswith('exec_'):
+                    try:
+                        id_num = int(latest_id.split('_')[1])
+                        execution_counter = max(execution_counter, id_num + 1)
+                    except:
+                        pass
+        except Exception as e:
+            logger.warning(f"Failed to check database for latest execution ID: {e}")
+        
+        exec_id = f"exec_{execution_counter:03d}"
+        execution_counter += 1
+        return exec_id
 
 def add_execution_record(execution_data: Dict):
-    """Add a new execution record to history"""
-    global execution_counter
-    execution_data['id'] = f"exec_{execution_counter:03d}"
-    execution_data['started_at'] = datetime.now().isoformat()
-    execution_history.append(execution_data)
-    execution_counter += 1
+    """Add a new execution record using ExecutionManager"""
+    if 'started_at' not in execution_data:
+        execution_data['started_at'] = datetime.now()
+    
+    # Use ExecutionManager for atomic save
+    success = execution_manager.save_execution(execution_data)
+    if not success:
+        raise Exception(f"Failed to save execution record {execution_data.get('id', 'unknown')}")
+    
+    # Keep legacy JSON list updated for backward compatibility
+    execution_history.append({
+        **execution_data,
+        'started_at': execution_data['started_at'].isoformat() if isinstance(execution_data['started_at'], datetime) else execution_data['started_at']
+    })
     save_execution_history()
 
 def update_execution_record(execution_id: str, updates: Dict):
-    """Update an existing execution record"""
-    for execution in execution_history:
-        if execution['id'] == execution_id:
-            execution.update(updates)
-            if 'completed_at' in updates:
-                execution['duration'] = (
-                    datetime.fromisoformat(execution['completed_at']) - 
-                    datetime.fromisoformat(execution['started_at'])
-                ).total_seconds()
-            save_execution_history()
-            break
+    """Update an existing execution record using ExecutionManager"""
+    try:
+        # Get current execution data
+        current_execution = execution_manager.get_execution(execution_id)
+        if not current_execution:
+            logger.error(f"Execution {execution_id} not found for update")
+            return False
+        
+        # Apply updates
+        current_execution.update(updates)
+        
+        # Calculate duration if completed
+        if 'completed_at' in updates and current_execution.get('started_at'):
+            try:
+                started = current_execution['started_at']
+                completed = updates['completed_at']
+                
+                if isinstance(started, str):
+                    started = datetime.fromisoformat(started)
+                if isinstance(completed, str):
+                    completed = datetime.fromisoformat(completed)
+                
+                current_execution['duration'] = (completed - started).total_seconds()
+            except Exception as e:
+                logger.warning(f"Failed to calculate duration for {execution_id}: {e}")
+        
+        # Ensure output_data is used consistently (not 'output' or 'results')
+        if 'output' in current_execution and 'output_data' not in current_execution:
+            current_execution['output_data'] = current_execution.pop('output')
+        if 'results' in current_execution and 'output_data' not in current_execution:
+            current_execution['output_data'] = current_execution.pop('results')
+        
+        # Save atomically using ExecutionManager
+        success = execution_manager.save_execution(current_execution)
+        if not success:
+            logger.error(f"Failed to update execution {execution_id}")
+            return False
+        
+        # Update legacy JSON list for backward compatibility
+        for execution in execution_history:
+            if execution.get('id') == execution_id:
+                execution.update(updates)
+                if 'duration' in current_execution:
+                    execution['duration'] = current_execution['duration']
+                break
+        save_execution_history()
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error updating execution {execution_id}: {e}")
+        return False
 
 # Initialize Sentry
-SENTRY_DSN = os.getenv("SENTRY_DSN", "")
+SENTRY_DSN = os.getenv("SENTRY_DSN", config_system.get("observability.sentry_dsn", ""))
 if SENTRY_DSN:
     sentry_sdk.init(
         dsn=SENTRY_DSN,
-        traces_sample_rate=1.0,
-        profiles_sample_rate=1.0)
+        traces_sample_rate=config_system.get("observability.trace_sample_rate", 1.0),
+        profiles_sample_rate=config_system.get("observability.profiles_sample_rate", 1.0))
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -122,24 +208,68 @@ observability_manager.initialize()
 evaluation_system.initialize()
 performance_optimizer.initialize()
 
-app = FastAPI(title="CrewAI Workflow API", version="2.0.0")
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app = FastAPI(
+    title=config_system.get("app.name", "CrewAI Workflow API"),
+    version=config_system.get("app.version", "2.0.0"),
+    docs_url=config_system.get("app.docs_url", "/docs"),
+    redoc_url=config_system.get("app.redoc_url", "/redoc"),
+    debug=config_system.get("app.debug", False)
+)
 
-# Enhanced CORS middleware
-# Get allowed origins from environment variable
-allowed_origins = os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8100").split(",")
-allowed_origins = [origin.strip() for origin in allowed_origins]
+# Register error handlers
+error_handler(app)
+error_handling_middleware(app)
+app.state.limiter = limiter
+
+# Create a custom rate limit handler that matches FastAPI's expected signature
+async def custom_rate_limit_handler(request: Request, exc: Exception):
+    # Use our own RateLimitError from error_handling.py instead of relying on slowapi
+    error_detail = {
+        "error": "rate_limit_exceeded",
+        "message": "Rate limit exceeded",
+        "details": {"retry_after": getattr(exc, "retry_after", 60)}
+    }
+    return JSONResponse(
+        status_code=429,
+        content=error_detail,
+        headers={"Retry-After": str(getattr(exc, "retry_after", 60))}
+    )
+
+app.add_exception_handler(RateLimitExceeded, custom_rate_limit_handler)
+
+# Enhanced CORS middleware with security best practices
+# Get CORS configuration from config system
+allowed_origins = config_system.get("app.cors_origins", [])
+# If it's a string from environment variable, split it
+if isinstance(allowed_origins, str):
+    allowed_origins = [origin.strip() for origin in allowed_origins.split(",")]
+
+# Log the CORS configuration
+log_info(logger, f"Configuring CORS with allowed origins: {allowed_origins}")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
-    expose_headers=["*"],
+    allow_credentials=config_system.get("app.cors_allow_credentials", False),
+    allow_methods=config_system.get("app.cors_allow_methods", ["GET", "POST", "PUT", "DELETE", "OPTIONS"]),
+    allow_headers=config_system.get("app.cors_allow_headers", ["Authorization", "Content-Type"]),
+    expose_headers=config_system.get("app.cors_expose_headers", ["Content-Length", "Content-Type"]),
     max_age=3600,
 )
+
+# Add security headers middleware
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    
+    # Add security headers
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Content-Security-Policy"] = "default-src 'self'"
+    
+    return response
 
 # Instrument FastAPI with observability
 observability_manager.instrument_fastapi_app(app)
@@ -153,8 +283,8 @@ app.mount("/api/config", config_app)
 
 # Authentication endpoints
 class LoginRequest(BaseModel):
-    username: str = Field(..., description="Username")
-    password: str = Field(..., description="Password")
+    username: str = Field(default=..., description="Username")
+    password: str = Field(default=..., description="Password")
 
 
 class TokenResponse(BaseModel):
@@ -164,14 +294,28 @@ class TokenResponse(BaseModel):
 
 
 @app.post("/api/auth/login", response_model=TokenResponse)
+@with_error_handling("Login failed", AuthenticationError)
 async def login(request: LoginRequest):
-    """Login endpoint to get JWT token"""
+    """
+    Login endpoint to get JWT token.
+    
+    Args:
+        request (LoginRequest): Login credentials
+        
+    Returns:
+        TokenResponse: JWT token and user information
+        
+    Raises:
+        AuthenticationError: If authentication fails
+    """
+    # Validate input
+    if not request.username or not request.password:
+        raise ValidationError("Username and password are required")
+        
+    # Authenticate user
     user = authenticate_user(request.username, request.password)
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid username or password",
-        )
+        raise AuthenticationError("Invalid username or password")
     
     # Create token
     token_data = {
@@ -180,7 +324,12 @@ async def login(request: LoginRequest):
         "role": user["role"],
         "email": user.get("email", "")
     }
-    access_token = auth_manager.create_access_token(token_data)
+    
+    try:
+        access_token = auth_manager.create_access_token(token_data)
+    except Exception as e:
+        log_error(logger, f"Token creation failed: {str(e)}")
+        raise AuthenticationError("Failed to create authentication token")
     
     return TokenResponse(
         access_token=access_token,
@@ -189,97 +338,609 @@ async def login(request: LoginRequest):
 
 
 @app.get("/api/auth/me")
+@with_error_handling("Failed to retrieve user profile", AuthenticationError)
 async def get_me(current_user: Dict[str, Any] = Depends(get_current_user)):
-    """Get current user information"""
+    """
+    Get current user information.
+    
+    Args:
+        current_user (Dict[str, Any]): The authenticated user information
+        
+    Returns:
+        Dict[str, Any]: User profile information
+        
+    Raises:
+        AuthenticationError: If authentication fails
+    """
+    if not current_user:
+        raise AuthenticationError("User not authenticated")
+    
     return current_user
 
 
 @app.get("/api/auth/status")
+@with_error_handling("Failed to retrieve authentication status", ConfigurationError)
 async def auth_status():
-    """Get authentication status"""
-    return {
-        "auth_enabled": ENABLE_AUTH,
-        "auth_type": "jwt",
-        "features": {
-            "login": True,
-            "logout": True,
-            "refresh": False,
-            "register": False
+    """
+    Get authentication status.
+    
+    Returns:
+        Dict[str, Any]: Authentication configuration information
+        
+    Raises:
+        ConfigurationError: If configuration retrieval fails
+    """
+    try:
+        auth_config = config_system.get("security", {})
+        
+        return {
+            "auth_enabled": ENABLE_AUTH,
+            "auth_type": auth_config.get("auth_type", "jwt"),
+            "features": {
+                "login": True,
+                "logout": True,
+                "refresh": auth_config.get("refresh_enabled", False),
+                "register": auth_config.get("registration_enabled", False)
+            },
+            "token_expiry": auth_config.get("jwt_expiry", 86400)
         }
-    }
+    except Exception as e:
+        log_error(logger, f"Error retrieving auth configuration: {str(e)}")
+        raise ConfigurationError("Failed to retrieve authentication configuration")
 
 
 # New workflow execution endpoint using configuration
-@app.post("/api/workflow/execute")
+@app.post("/api/workflow/execute",
+          summary="Execute a workflow with configuration",
+          description="Execute a workflow using the specified configuration and input data",
+          response_model=Dict[str, Any],
+          responses={
+              200: {"description": "Workflow executed successfully"},
+              400: {"description": "Invalid input data"},
+              401: {"description": "Authentication required"},
+              500: {"description": "Internal server error"}
+          })
+@with_error_handling("Failed to execute workflow")
 async def execute_workflow_with_config(
-    request: Request, 
+    request: Request,
     data: dict,
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    """Execute workflow using current configuration"""
-    try:
-        workflow_id = data.get("workflow_id", "default_workflow")
-        input_data = data.get("input_data", {})
+    """
+    Execute workflow using current configuration.
+    
+    This endpoint executes a workflow based on the specified workflow_id and input data.
+    It adds user information to the input data for audit trail purposes and returns
+    the result of the workflow execution.
+    
+    Args:
+        request (Request): The FastAPI request object
+        data (dict): Dictionary containing workflow_id and input_data
+        current_user (Dict[str, Any]): The authenticated user information
         
-        # Add user info to input data for audit trail
-        input_data["_executed_by"] = current_user.get("username", "unknown")
-        input_data["_executed_at"] = datetime.now().isoformat()
+    Returns:
+        JSONResponse: The result of the workflow execution
+        
+    Raises:
+        ValidationError: If input data is invalid
+        WorkflowError: If workflow execution fails
+        AppError: For other application errors
+    """
+    # Validate input data using the validation module
+    validate_workflow_request(data)
+    
+    workflow_id = data.get("workflow_id")
+    if not workflow_id:
+        raise ValidationError("workflow_id is required", {"field": "workflow_id"})
+        
+    input_data = data.get("input_data", {})
+    
+    # Add user info to input data for audit trail
+    input_data["_executed_by"] = current_user.get("username", "unknown")
+    input_data["_executed_at"] = datetime.now().isoformat()
+    
+    # Create execution record with thread-safe ID generation
+    execution_id = await get_next_execution_id()
+    execution_data = {
+        'id': execution_id,
+        'workflow_id': workflow_id,
+        'status': 'processing',
+        'started_at': datetime.now().isoformat(),
+        'username': current_user.get("username", "unknown"),
+        'input_data': input_data
+    }
+    add_execution_record(execution_data)
+    execution_id = execution_data['id']
 
-        result = await workflow_executor.run_full_workflow(workflow_id, input_data)
-        return JSONResponse(result)
-    except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
+    # Execute workflow with the execution_id
+    result = await workflow_executor.run_full_workflow(workflow_id, input_data, execution_id)
+    
+    # Update execution record with results
+    update_data = {
+        'status': result.get('status', 'completed'),
+        'completed_at': datetime.now().isoformat(),
+        'execution_time': result.get('execution_time', 0),
+        'results': result.get('results', {}),
+        'error_message': result.get('error_message')
+    }
+    
+    # Add evaluation score if available
+    if '_evaluation' in result.get('results', {}):
+        update_data['evaluation_score'] = result['results']['_evaluation'].get('score')
+        update_data['evaluation_feedback'] = result['results']['_evaluation'].get('feedback')
+    
+    update_execution_record(execution_id, update_data)
+    
+    # Add execution_id to result
+    result['execution_id'] = execution_id
+    
+    return JSONResponse(result)
 
 
 # Enhanced API endpoints for observability, evaluation, and performance
-@app.get("/api/observability/traces")
+@app.get("/api/observability/traces",
+         summary="Get trace summary",
+         description="Retrieve a summary of all traces collected by the observability system",
+         response_model=Dict[str, Any],
+         responses={
+             200: {"description": "Trace summary retrieved successfully"},
+             500: {"description": "Internal server error"}
+         })
+@with_error_handling("Failed to retrieve trace summary", ExternalServiceError)
 async def get_traces():
-    """Get trace summary"""
-    try:
-        with observability_manager.trace_workflow("get_traces"):
-            return observability_manager.get_trace_summary()
-    except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
+    """
+    Get trace summary from the observability system.
+    
+    This endpoint retrieves a summary of all traces collected by the
+    observability system. Traces provide detailed information about
+    request processing, including timing, dependencies, and errors.
+    
+    Returns:
+        dict: Summary of collected traces
+        
+    Raises:
+        ExternalServiceError: If an error occurs while retrieving traces
+    """
+    with observability_manager.trace_workflow("get_traces"):
+        return observability_manager.get_trace_summary()
 
 
-@app.get("/api/evaluation/summary")
+@app.get("/api/observability/history",
+         summary="Get observability history",
+         description="Retrieve historical observability metrics from the database",
+         response_model=Dict[str, Any],
+         responses={
+             200: {"description": "Observability history retrieved successfully"},
+             500: {"description": "Internal server error"}
+         })
+@with_error_handling("Failed to retrieve observability history", ExternalServiceError)
+async def get_observability_history(
+    limit: int = Query(100, ge=1, le=1000, description="Maximum number of records to return")
+):
+    """
+    Get historical observability metrics from the database.
+    
+    Args:
+        limit: Maximum number of records to return (default: 100)
+    
+    Returns:
+        dict: Historical observability data
+    """
+    from database import get_database_manager
+    db_manager = get_database_manager()
+    
+    # Get historical data
+    history = db_manager.get_observability_history(limit=limit)
+    
+    # Get aggregated performance metrics
+    performance_metrics = db_manager.get_performance_metrics()
+    
+    return {
+        "history": history,
+        "performance_metrics": performance_metrics,
+        "total_records": len(history),
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+@app.get("/api/evaluation/summary",
+         summary="Get evaluation summary",
+         description="Retrieve a summary of all evaluations performed by the evaluation system",
+         response_model=Dict[str, Any],
+         responses={
+             200: {"description": "Evaluation summary retrieved successfully"},
+             500: {"description": "Internal server error"}
+         })
+@with_error_handling("Failed to retrieve evaluation summary", ExternalServiceError)
 async def get_evaluation_summary():
-    """Get evaluation summary"""
+    """
+    Get evaluation summary from the evaluation system.
+    
+    This endpoint retrieves a summary of all evaluations performed by the
+    evaluation system, including metrics, scores, and historical data.
+    
+    Returns:
+        dict: Summary of evaluation results and metrics
+        
+    Raises:
+        ExternalServiceError: If an error occurs while retrieving the summary
+    """
+    return evaluation_system.get_evaluation_summary()
+
+
+@app.get("/api/evaluation/metrics",
+         summary="Get evaluation metrics",
+         description="Retrieve detailed evaluation metrics and trends",
+         response_model=Dict[str, Any],
+         responses={
+             200: {"description": "Evaluation metrics retrieved successfully"},
+             500: {"description": "Internal server error"}
+         })
+@with_error_handling("Failed to retrieve evaluation metrics", ExternalServiceError)
+async def get_evaluation_metrics():
+    """
+    Get detailed evaluation metrics from the evaluation system.
+    
+    Returns evaluation trends, performance metrics, and statistical analysis.
+    """
+    # Get metrics from database
+    from database import get_database_manager
+    db_manager = get_database_manager()
+    
+    # Get aggregated metrics from database
+    db_metrics = db_manager.get_evaluation_metrics()
+    
+    # Get recent evaluation history
+    recent_results = db_manager.get_evaluation_history(limit=30)
+    
+    # Calculate trends
+    recent_trends = []
+    if recent_results:
+        # Group by date
+        from collections import defaultdict
+        daily_scores = defaultdict(list)
+        
+        for result in recent_results:
+            date_str = result['timestamp'].strftime("%Y-%m-%d") if hasattr(result['timestamp'], 'strftime') else str(result['timestamp'])[:10]
+            if result.get('quality_score'):
+                daily_scores[date_str].append(result['quality_score'])
+        
+        # Calculate daily averages
+        for date_str, scores in sorted(daily_scores.items())[-7:]:  # Last 7 days
+            recent_trends.append({
+                "date": date_str,
+                "score": sum(scores) / len(scores) if scores else 0,
+                "count": len(scores)
+            })
+    
+    # Calculate overall performance
+    total_evals = db_metrics.get('total_evaluations', 0)
+    successful_evals = sum(1 for r in recent_results 
+                          if r.get('quality_score', 0) >= 80)  # 80% or higher is successful
+    
+    overall_performance = {
+        "improvement_trend": 0.0,  # Will calculate based on first vs last period
+        "success_rate": successful_evals / len(recent_results) if recent_results else 0
+    }
+    
+    # Calculate improvement trend
+    if len(recent_results) >= 10:
+        first_half = recent_results[:len(recent_results)//2]
+        second_half = recent_results[len(recent_results)//2:]
+        
+        first_avg = sum(r.score for r in first_half if isinstance(r.score, (int, float))) / len(first_half)
+        second_avg = sum(r.score for r in second_half if isinstance(r.score, (int, float))) / len(second_half)
+        
+        if first_avg > 0:
+            overall_performance["improvement_trend"] = (second_avg - first_avg) / first_avg
+    
+    return {
+        "recent_trends": recent_trends,
+        "overall_performance": overall_performance,
+        "metric_distribution": db_metrics.get("channel_distribution", {}),
+        "total_evaluations": total_evals,
+        "average_quality_score": db_metrics.get("average_quality_score", 0),
+        "recent_evaluations": db_metrics.get("recent_evaluations", []),
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+@app.get("/api/performance/metrics",
+         summary="Get performance metrics with pagination",
+         description="Retrieve performance metrics from the performance optimization system with pagination support",
+         responses={
+             200: {"description": "Performance metrics retrieved successfully"},
+             500: {"description": "Internal server error"}
+         })
+@with_error_handling("Failed to retrieve performance metrics", ExternalServiceError)
+async def get_performance_metrics(
+    pagination: dict = Depends(pagination_params)
+):
+    """
+    Get performance metrics from the performance optimization system with pagination.
+    
+    This endpoint retrieves metrics related to system performance, including
+    latency, throughput, memory usage, and optimization statistics.
+    
+    Args:
+        pagination: Pagination parameters (page, page_size)
+        
+    Returns:
+        PaginatedResponse: Paginated performance metrics
+        
+    Raises:
+        ExternalServiceError: If an error occurs while retrieving metrics
+    """
+    # Get all metrics
+    metrics_data = performance_optimizer.get_all_performance_metrics()
+    
+    # Get trace summary from observability
+    trace_summary = observability_manager.get_trace_summary()
+    
+    # Get summary data (not paginated)
+    summary = {
+        "current_metrics": metrics_data.get("current_metrics", {}),
+        "average_metrics": metrics_data.get("average_metrics", {}),
+        "monitoring_active": metrics_data.get("monitoring_active", False),
+        "traces": {
+            "total_traces": trace_summary.get("total_traces", 0),
+            "errors": sum(1 for t in trace_summary.get("recent_traces", []) if t.get("status") == "failed"),
+            "avg_execution_time": trace_summary.get("performance", {}).get("average_duration", 0)
+        }
+    }
+    
+    # Get detailed metrics for pagination
+    detailed_metrics = metrics_data.get("detailed_metrics", [])
+    
+    # Apply pagination to detailed metrics
+    paginated_response = Paginator.paginate_list(
+        items=detailed_metrics,
+        page=pagination["page"],
+        page_size=pagination["page_size"]
+    )
+    
+    # Add summary data to response
+    result = paginated_response.dict()
+    result["summary"] = summary
+    
+    return result
+
+
+@app.get("/api/performance/agents",
+         summary="Get agent-specific performance metrics",
+         description="Retrieve performance metrics for individual agents",
+         responses={
+             200: {"description": "Agent performance metrics retrieved successfully"},
+             500: {"description": "Internal server error"}
+         })
+@with_error_handling("Failed to retrieve agent performance metrics", ExternalServiceError)
+async def get_agent_performance_metrics(
+    pagination: dict = Depends(pagination_params)
+):
+    """
+    Get performance metrics for individual agents.
+    
+    Returns metrics like success rates, average execution times, 
+    and quality scores for each agent in the system.
+    """
+    # Get execution history to analyze agent performance
+    from database import get_database_manager
     try:
-        return evaluation_system.get_evaluation_summary()
-    except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
+        db_manager = get_database_manager()
+        history = db_manager.get_execution_history(limit=1000)
+    except Exception:
+        history = execution_history
+    
+    # Process agent performance data
+    agent_metrics = {}
+    
+    for execution in history:
+        output_data = execution.get('output_data', {})
+        
+        # Extract agent performance from workflow steps
+        if isinstance(output_data, dict):
+            for step_name, step_data in output_data.items():
+                if isinstance(step_data, dict) and 'execution_time' in step_data:
+                    agent_name = step_name.replace('_', ' ').title()
+                    
+                    if agent_name not in agent_metrics:
+                        agent_metrics[agent_name] = {
+                            'agent_name': agent_name,
+                            'total_executions': 0,
+                            'successful_executions': 0,
+                            'total_execution_time': 0,
+                            'quality_scores': []
+                        }
+                    
+                    agent_metrics[agent_name]['total_executions'] += 1
+                    if step_data.get('status') == 'success':
+                        agent_metrics[agent_name]['successful_executions'] += 1
+                    
+                    exec_time = step_data.get('execution_time', 0)
+                    agent_metrics[agent_name]['total_execution_time'] += exec_time
+    
+    # Calculate final metrics
+    agent_performance_list = []
+    for agent_name, metrics in agent_metrics.items():
+        if metrics['total_executions'] > 0:
+            agent_performance_list.append({
+                'agent_name': agent_name,
+                'total_executions': metrics['total_executions'],
+                'success_rate': round(metrics['successful_executions'] / metrics['total_executions'], 3),
+                'average_execution_time': round(metrics['total_execution_time'] / metrics['total_executions'], 3),
+                'status': 'healthy' if metrics['successful_executions'] / metrics['total_executions'] > 0.8 else 'warning'
+            })
+    
+    # Apply pagination
+    paginated_response = Paginator.paginate_list(
+        items=agent_performance_list,
+        page=pagination["page"],
+        page_size=pagination["page_size"]
+    )
+    
+    return paginated_response.dict()
 
 
-@app.get("/api/performance/metrics")
-async def get_performance_metrics():
-    """Get performance metrics"""
+@app.get("/api/performance/system",
+         summary="Get system-wide performance metrics",
+         description="Retrieve overall system performance and resource utilization metrics",
+         responses={
+             200: {"description": "System performance metrics retrieved successfully"},
+             500: {"description": "Internal server error"}
+         })
+@with_error_handling("Failed to retrieve system performance metrics", ExternalServiceError)
+async def get_system_performance_metrics():
+    """
+    Get system-wide performance metrics including resource utilization,
+    throughput, and overall system health indicators.
+    """
+    from datetime import datetime, timedelta
+    
+    # Get current system metrics
+    current_time = datetime.now()
+    
+    # System resource metrics (with fallback if psutil not available)
     try:
-        return performance_optimizer.get_performance_metrics()
-    except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
+        import psutil
+        cpu_percent = psutil.cpu_percent(interval=1)
+        memory = psutil.virtual_memory()
+        disk = psutil.disk_usage('/')
+        uptime_hours = round((current_time - datetime.fromtimestamp(psutil.boot_time())).total_seconds() / 3600, 1)
+        active_processes = len(psutil.pids())
+    except ImportError:
+        # Fallback values if psutil is not available
+        cpu_percent = 0.0
+        memory = type('Memory', (), {'percent': 0.0, 'used': 0, 'total': 8*1024**3})()  # Mock 8GB
+        disk = type('Disk', (), {'percent': 0.0, 'used': 0, 'total': 100*1024**3})()  # Mock 100GB
+        uptime_hours = 0.0
+        active_processes = 0
+    
+    # Get execution statistics from recent history
+    from database import get_database_manager
+    try:
+        db_manager = get_database_manager()
+        recent_history = db_manager.get_execution_history(limit=100)
+    except Exception:
+        recent_history = execution_history[-100:] if execution_history else []
+    
+    # Calculate throughput metrics
+    now = datetime.now()
+    last_hour = now - timedelta(hours=1)
+    last_24h = now - timedelta(hours=24)
+    
+    recent_executions_1h = [
+        h for h in recent_history 
+        if h.get('completed_at') and datetime.fromisoformat(h['completed_at']) > last_hour
+    ]
+    
+    recent_executions_24h = [
+        h for h in recent_history 
+        if h.get('completed_at') and datetime.fromisoformat(h['completed_at']) > last_24h
+    ]
+    
+    # Calculate average execution time
+    completed_executions = [h for h in recent_history if h.get('status') == 'success' and h.get('duration')]
+    avg_execution_time = 0
+    if completed_executions:
+        avg_execution_time = sum(h.get('duration', 0) for h in completed_executions) / len(completed_executions)
+    
+    system_metrics = {
+        'timestamp': current_time.isoformat(),
+        'resource_utilization': {
+            'cpu_percent': round(cpu_percent, 2),
+            'memory_percent': round(memory.percent, 2),
+            'memory_used_gb': round(memory.used / (1024**3), 2),
+            'memory_total_gb': round(memory.total / (1024**3), 2),
+            'disk_percent': round(disk.percent, 2),
+            'disk_used_gb': round(disk.used / (1024**3), 2),
+            'disk_total_gb': round(disk.total / (1024**3), 2)
+        },
+        'throughput_metrics': {
+            'executions_last_hour': len(recent_executions_1h),
+            'executions_last_24h': len(recent_executions_24h),
+            'average_execution_time_seconds': round(avg_execution_time, 3),
+            'total_executions': len(recent_history)
+        },
+        'system_health': {
+            'status': 'healthy' if cpu_percent < 80 and memory.percent < 80 else 'warning',
+            'uptime_hours': uptime_hours,
+            'active_processes': active_processes
+        },
+        'performance_indicators': {
+            'success_rate': round(len([h for h in recent_history if h.get('status') == 'success']) / len(recent_history), 3) if recent_history else 0,
+            'error_rate': round(len([h for h in recent_history if h.get('status') == 'error']) / len(recent_history), 3) if recent_history else 0,
+            'average_quality_score': round(sum(h.get('output_data', {}).get('quality_score', 0) for h in recent_history) / len(recent_history), 1) if recent_history else 0
+        }
+    }
+    
+    return system_metrics
 
 
-@app.get("/api/system/health")
+@app.get("/api/system/health",
+         summary="Get system health",
+         description="Retrieve comprehensive health information about all system components",
+         response_model=Dict[str, Any],
+         responses={
+             200: {"description": "System health information retrieved successfully"},
+             500: {"description": "Internal server error"}
+         })
+@with_error_handling("Failed to retrieve system health information")
 async def get_system_health():
-    """Get comprehensive system health"""
+    """
+    Get comprehensive system health information.
+    
+    This endpoint provides health status for all major system components:
+    - Observability system status and metrics
+    - Evaluation system status and metrics
+    - Performance optimization system status
+    
+    Returns:
+        dict: Health status of all system components
+        
+    Raises:
+        AppError: If an error occurs while retrieving health information
+    """
+    # Safely get observability metrics
     try:
-        return {
-            "observability": {
-                "initialized": observability_manager.is_initialized,
-                "traces_count": len(observability_manager.traces),
-            },
-            "evaluation": {
-                "initialized": evaluation_system.is_initialized,
-                "evaluations_count": len(evaluation_system.evaluation_history),
-            },
-            "performance": {
-                "monitoring_active": performance_optimizer.is_monitoring,
-                "optimizations_count": len(performance_optimizer.optimization_history),
-            },
+        observability_metrics = {
+            "initialized": observability_manager.is_initialized,
+            "traces_count": getattr(observability_manager, "traces", []),
+        }
+        if isinstance(observability_metrics["traces_count"], list):
+            observability_metrics["traces_count"] = len(observability_metrics["traces_count"])
+        else:
+            observability_metrics["traces_count"] = 0
+    except Exception as e:
+        log_error(logger, f"Error getting observability metrics: {str(e)}")
+        observability_metrics = {"initialized": False, "error": str(e)}
+    
+    # Safely get evaluation metrics
+    try:
+        evaluation_metrics = {
+            "initialized": evaluation_system.is_initialized,
+            "evaluations_count": len(evaluation_system.evaluation_history),
         }
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
+        log_error(logger, f"Error getting evaluation metrics: {str(e)}")
+        evaluation_metrics = {"initialized": False, "error": str(e)}
+    
+    # Safely get performance metrics
+    try:
+        performance_metrics = {
+            "monitoring_active": performance_optimizer.is_monitoring,
+            "optimizations_count": len(performance_optimizer.optimization_history),
+        }
+    except Exception as e:
+        log_error(logger, f"Error getting performance metrics: {str(e)}")
+        performance_metrics = {"monitoring_active": False, "error": str(e)}
+    
+    return {
+        "observability": observability_metrics,
+        "evaluation": evaluation_metrics,
+        "performance": performance_metrics,
+        "timestamp": datetime.now().isoformat(),
+        "status": "healthy"
+    }
 
 
 # WebSocket Connection Manager
@@ -292,7 +953,7 @@ class ConnectionManager:
     async def connect(self, websocket: WebSocket, client_id: str):
         await websocket.accept()
         self.active_connections.append(websocket)
-        self.client_workflows[client_id] = None
+        self.client_workflows[client_id] = ""  # Use empty string instead of None
         await self.send_personal_message(
             {"type": "connection", "message": "Connected to workflow stream"}, websocket
         )
@@ -324,28 +985,28 @@ manager = ConnectionManager()
 # Pydantic models for request validation
 class WorkflowRequest(BaseModel):
     conversation_thread: str = Field(
-        ..., 
+        default=...,
         description="The conversation thread to analyze",
         min_length=1,
         max_length=50000
     )
     channel: str = Field(
-        ...,
+        default=...,
         description="Communication channel (linkedin/email)",
         pattern="^(linkedin|email)$"
     )
     prospect_profile_url: str = Field(
-        ..., 
+        default=...,
         description="LinkedIn profile URL of the prospect",
         pattern="^https?://(www\\.)?linkedin\\.com/in/[\\w-]+/?\\s*$"
     )
     prospect_company_url: str = Field(
-        ..., 
+        default=...,
         description="Company LinkedIn URL",
         pattern="^https?://(www\\.)?linkedin\\.com/company/[\\w-]+/?\\s*$"
     )
     prospect_company_website: str = Field(
-        ...,
+        default=...,
         description="Company website URL",
         pattern="^https?://[\\w.-]+\\.[\\w.-]+.*$"
     )
@@ -382,10 +1043,10 @@ class WorkflowFilters(BaseModel):
 
 class BatchWorkflowRequest(BaseModel):
     requests: List[WorkflowRequest] = Field(
-        ..., 
+        default=...,
         description="List of workflow requests to process",
-        min_items=1,
-        max_items=50
+        min_length=1,
+        max_length=50
     )
     parallel: bool = Field(
         True, 
@@ -417,8 +1078,22 @@ class BatchWorkflowRequest(BaseModel):
         }
 
 
-@app.get("/", response_class=HTMLResponse)
+@app.get("/",
+         response_class=HTMLResponse,
+         summary="Main application page",
+         description="Renders the main application HTML page")
 def index(request: Request):
+    """
+    Render the main application HTML page.
+    
+    This endpoint serves the main application interface using Jinja2 templates.
+    
+    Args:
+        request (Request): The FastAPI request object
+        
+    Returns:
+        TemplateResponse: The rendered HTML template
+    """
     return templates.TemplateResponse("index.html", {"request": request})
 
 
@@ -472,8 +1147,17 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
         manager.disconnect(websocket, client_id)
 
 
-@app.post("/run")
+@app.post("/run",
+          summary="Run a workflow for LinkedIn or email outreach",
+          description="Process a workflow request for profile enrichment, thread analysis, and reply generation",
+          responses={
+              200: {"description": "Workflow executed successfully"},
+              400: {"description": "Invalid input data"},
+              429: {"description": "Rate limit exceeded"},
+              500: {"description": "Internal server error"}
+          })
 @limiter.limit("5/minute")
+@with_error_handling("Failed to execute workflow")
 async def run(
     request: Request,
     workflow_request: WorkflowRequest,
@@ -485,8 +1169,49 @@ async def run(
     priority: str = Query("normal", description="Workflow priority level"),
     background: str = Query("false", description="Run in background"),
 ):
-    # Create execution record
+    """
+    Run a workflow for LinkedIn or email outreach.
+    
+    This endpoint processes a workflow request that includes profile enrichment,
+    thread analysis, and reply generation steps. It can run synchronously or
+    in the background.
+    
+    Args:
+        request (Request): The FastAPI request object
+        workflow_request (WorkflowRequest): The workflow request data
+        include_profile (bool): Whether to include profile enrichment
+        include_thread_analysis (bool): Whether to include thread analysis
+        include_reply_generation (bool): Whether to include reply generation
+        priority (str): Workflow priority level
+        background (str): Whether to run in background
+        
+    Returns:
+        JSONResponse: The workflow execution result or task ID
+        
+    Raises:
+        ValidationError: If input data is invalid
+        RateLimitError: If rate limit is exceeded
+        AppError: For other application errors
+    """
+    # Validate input data
+    try:
+        # Validate workflow request data
+        validate_profile_enrichment(workflow_request.dict())
+        
+        # Validate priority
+        if priority not in ["low", "normal", "high"]:
+            raise ValidationError("Priority must be 'low', 'normal', or 'high'")
+            
+        # Validate background flag
+        if background.lower() not in ["true", "false"]:
+            raise ValidationError("Background must be 'true' or 'false'")
+    except Exception as e:
+        log_error(logger, f"Validation error: {str(e)}")
+        raise ValidationError(f"Invalid workflow request: {str(e)}")
+    # Create execution record with ID
+    execution_id = await get_next_execution_id()
     execution_data = {
+        "id": execution_id,
         "workflow_id": "linkedin-workflow",
         "workflow_name": "LinkedIn Outreach Workflow",
         "status": "running",
@@ -517,7 +1242,20 @@ async def run(
     
     # Add to execution history
     add_execution_record(execution_data)
-    execution_id = execution_data['id']
+    
+    # Start observability tracking for the new workflow
+    try:
+        observability_manager.start_workflow(
+            workflow_id=execution_id,
+            workflow_name="LinkedIn Outreach Workflow",
+            metadata={
+                "channel": workflow_request.channel,
+                "prospect_company": workflow_request.prospect_company_url
+            }
+        )
+        log_info(logger, f"Started observability tracking for execution {execution_id}")
+    except Exception as e:
+        log_warning(logger, f"Failed to start observability tracking: {e}")
     
     input_data = workflow_request.dict()
     input_data.update(
@@ -554,9 +1292,9 @@ async def run(
             })
             
             # Run actual workflow with logging
-            logger.info(f"Calling run_workflow with input_data: {input_data}")
+            log_info(logger, f"Calling run_workflow with input_data: {input_data}")
             result = run_workflow(**input_data)
-            logger.info(f"run_workflow returned: {result}")
+            log_info(logger, f"run_workflow returned: {result}")
             
             # Extract messages from the structured reply
             parsed_messages = result.get("parsed_messages")
@@ -673,65 +1411,171 @@ async def run(
                 
                 predicted_response_rate = round(predicted_response_rate, 2)
                 
-                logger.info(f"Message evaluation - Quality: {quality_score}%, Response Rate: {predicted_response_rate:.2f}")
-                logger.info(f"Score breakdown - Personalization: {personalization_score}, Tone: {tone_score}, Value: {value_prop_score}, CTA: {cta_score}")
+                log_info(logger, f"Message evaluation - Quality: {quality_score}%, Response Rate: {predicted_response_rate:.2f}")
+                log_info(logger, f"Score breakdown - Personalization: {personalization_score}, Tone: {tone_score}, Value: {value_prop_score}, CTA: {cta_score}")
                 
             except Exception as e:
-                logger.error(f"Failed to evaluate message: {str(e)}")
+                log_error(logger, "Failed to evaluate message", e)
                 # Use defaults if evaluation fails
             
-            # Update execution with results
-            update_execution_record(execution_id, {
+            # Update execution with results using ExecutionManager
+            output_data = {
+                "message": message_content,
+                "immediate_response": message_content,
+                "follow_up_sequence": follow_up_sequence,
+                "quality_score": quality_score,
+                "predicted_response_rate": predicted_response_rate,
+                "has_follow_ups": len(follow_up_sequence) > 0
+            }
+            
+            steps_data = [
+                {
+                    "name": "Profile Research",
+                    "status": "completed",
+                    "duration": 180,
+                    "result": "Successfully analyzed profile and company data"
+                },
+                {
+                    "name": "Message Generation",
+                    "status": "completed",
+                    "duration": 240, 
+                    "result": f"Generated personalized message with {quality_score}% quality score"
+                },
+                {
+                    "name": "Quality Review",
+                    "status": "completed",
+                    "duration": 120,
+                    "result": "Message approved: Professional tone, clear value proposition"
+                }
+            ]
+            
+            # Use ExecutionManager for atomic update (replaces both JSON and database updates)
+            success = update_execution_record(execution_id, {
                 "status": "completed",
                 "completed_at": datetime.now().isoformat(),
                 "current_step": "Completed",
                 "progress": 100,
-                "output": {
-                    "message": message_content,
-                    "immediate_response": message_content,
-                    "follow_up_sequence": follow_up_sequence,
-                    "quality_score": quality_score,
-                    "predicted_response_rate": predicted_response_rate,
-                    "has_follow_ups": len(follow_up_sequence) > 0
-                },
-                "steps": [
-                    {
-                        "name": "Profile Research",
-                        "status": "completed",
-                        "duration": 180,
-                        "result": "Successfully analyzed profile and company data"
-                    },
-                    {
-                        "name": "Message Generation",
-                        "status": "completed",
-                        "duration": 240, 
-                        "result": f"Generated personalized message with {quality_score}% quality score"
-                    },
-                    {
-                        "name": "Quality Review",
-                        "status": "completed",
-                        "duration": 120,
-                        "result": "Message approved: Professional tone, clear value proposition"
-                    }
-                ]
+                "output_data": output_data,  # Use output_data consistently
+                "steps": steps_data
             })
+            
+            if not success:
+                log_error(logger, f"Failed to update execution {execution_id}")
+                return JSONResponse({"error": "Failed to save execution results", "execution_id": execution_id}, status_code=500)
+            
+            # Add observability tracking for the completed workflow
+            try:
+                # Complete in-memory observability tracking
+                observability_manager.complete_workflow(
+                    workflow_id=execution_id,
+                    status="completed"
+                )
+                
+                # Save observability data to database
+                from database import get_database_manager
+                db_manager = get_database_manager()
+                
+                # Calculate duration from execution data
+                execution_data = execution_manager.get_execution(execution_id)
+                duration_ms = execution_data.get('duration', 0) * 1000 if execution_data.get('duration') else 0
+                
+                observability_data = {
+                    "execution_id": execution_id,
+                    "workflow_id": "linkedin-workflow", 
+                    "timestamp": datetime.now().isoformat(),
+                    "duration_ms": duration_ms,
+                    "token_usage": 0,  # Would be tracked if we had token counting
+                    "cache_hits": 0,
+                    "cache_misses": 0,
+                    "step_durations": {step['name']: step['duration'] for step in steps_data},
+                    "error_count": 0,
+                    "warning_count": 0,
+                    "memory_usage_mb": None,
+                    "cpu_usage_percent": None
+                }
+                
+                success = db_manager.save_observability_metrics(observability_data)
+                if success:
+                    log_info(logger, f"Added observability tracking for execution {execution_id}")
+                else:
+                    log_warning(logger, f"Failed to save observability to database for execution {execution_id}")
+                    
+            except Exception as e:
+                log_warning(logger, f"Failed to add observability tracking: {e}")
+            
+            # Add evaluation tracking for the completed workflow
+            try:
+                from database import get_database_manager
+                from evaluation_system import EvaluationResult, EvaluationMetric
+                
+                db_manager = get_database_manager()
+                evaluation_data = {
+                    "execution_id": execution_id,
+                    "workflow_id": "linkedin-workflow",
+                    "timestamp": datetime.now().isoformat(),
+                    "quality_score": quality_score,
+                    "response_rate": {"predicted": predicted_response_rate},
+                    "criteria_scores": {},
+                    "feedback": f"Generated personalized message with {quality_score}% quality score",
+                    "message_content": message_content,
+                    "channel": "linkedin",
+                    "word_count": len(message_content.split()),
+                    "evaluated_by": "workflow_system"
+                }
+                
+                # Save to database using the database manager
+                success = db_manager.save_evaluation_result(evaluation_data)
+                if success:
+                    log_info(logger, f"Added evaluation tracking for execution {execution_id}")
+                else:
+                    log_warning(logger, f"Failed to save evaluation to database for execution {execution_id}")
+                    
+                # Also add to evaluation system's in-memory history as proper EvaluationResult object
+                evaluation_result = EvaluationResult(
+                    metric=EvaluationMetric.QUALITY,
+                    score=quality_score / 100.0,  # Convert percentage to 0-1 scale
+                    feedback=f"Generated personalized message with {quality_score}% quality score",
+                    confidence=0.8,  # High confidence since this is measured quality
+                    execution_time=0.1,  # Minimal time for internal evaluation
+                    evaluator="workflow_system",
+                    timestamp=datetime.now(),
+                    metadata={
+                        "execution_id": execution_id,
+                        "predicted_response_rate": predicted_response_rate,
+                        "word_count": len(message_content.split()),
+                        "channel": "linkedin"
+                    }
+                )
+                evaluation_system.evaluation_history.append(evaluation_result)
+                
+            except Exception as e:
+                log_warning(logger, f"Failed to add evaluation tracking: {e}")
             
             return JSONResponse({"result": result, "execution_id": execution_id})
             
     except Exception as e:
         # Update execution with error
-        logger.error(f"Error in /run endpoint: {str(e)}", exc_info=True)
+        log_error(logger, "Error in /run endpoint", e, exc_info=True)
         import traceback
-        logger.error(f"Full traceback: {traceback.format_exc()}")
+        log_error(logger, f"Full traceback: {traceback.format_exc()}")
         update_execution_record(execution_id, {
             "status": "failed",
             "completed_at": datetime.now().isoformat(),
-            "error": str(e)
+            "error_message": str(e)
         })
         return JSONResponse({"error": str(e), "execution_id": execution_id}, status_code=500)
 
 
-@app.post("/batch")
+@app.post("/batch",
+          summary="Process multiple workflow requests in batch",
+          description="Process multiple workflow requests in parallel for significantly improved throughput",
+          response_model=Dict[str, Any],
+          responses={
+              200: {"description": "Batch processing completed successfully"},
+              400: {"description": "Invalid batch request parameters"},
+              429: {"description": "Rate limit exceeded"},
+              500: {"description": "Internal server error"}
+          })
 @limiter.limit("2/minute")
 async def batch_process(
     request: Request,
@@ -744,7 +1588,34 @@ async def batch_process(
     priority: str = Query("normal", description="Workflow priority level"),
 ):
     """
-    Process multiple workflow requests in parallel for 100x+ throughput improvement
+    Process multiple workflow requests in parallel for 100x+ throughput improvement.
+    
+    This endpoint allows processing multiple workflow requests in a single batch
+    operation, either sequentially or in parallel with a configurable concurrency
+    limit. It's designed for high-throughput scenarios where many similar requests
+    need to be processed efficiently.
+    
+    Args:
+        request (Request): The FastAPI request object
+        batch_request (BatchWorkflowRequest): The batch request containing multiple workflow requests
+        include_profile (bool, optional): Whether to include profile enrichment. Defaults to True.
+        include_thread_analysis (bool, optional): Whether to include thread analysis. Defaults to True.
+        include_reply_generation (bool, optional): Whether to include reply generation. Defaults to True.
+        priority (str, optional): Workflow priority level. Defaults to "normal".
+        
+    Returns:
+        JSONResponse: Batch processing results including:
+            - batch_id: Unique identifier for the batch
+            - total_requests: Number of requests in the batch
+            - successful_requests: Number of successfully processed requests
+            - failed_requests: Number of failed requests
+            - total_processing_time: Total time taken to process the batch
+            - average_time_per_request: Average time per request
+            - throughput: Requests processed per second
+            - results: List of individual request results
+            
+    Raises:
+        HTTPException: If batch processing fails or rate limit is exceeded
     """
     if not batch_request.requests:
         return JSONResponse({"error": "No requests provided"}, status_code=400)
@@ -809,7 +1680,7 @@ async def batch_process(
     # Calculate batch metrics
     total_time = time.time() - start_time
     successful_requests = sum(
-        1 for r in results if r.get("status") == "success")
+        1 for r in results if isinstance(r, dict) and r.get("status") == "success")
     failed_requests = len(results) - successful_requests
 
     return JSONResponse(
@@ -939,15 +1810,24 @@ async def run_template(
 
         # Parse questions and get FAQ answers
         try:
-            thread_data = json.loads(
-                thread_analysis) if thread_analysis else {}
+            # Ensure thread_data is always a dictionary
+            if isinstance(thread_analysis, dict):
+                thread_data = thread_analysis
+            elif isinstance(thread_analysis, list):
+                thread_data = {"explicit_questions": thread_analysis}
+            elif thread_analysis:
+                thread_data = json.loads(thread_analysis)
+            else:
+                thread_data = {}
             questions = thread_data.get("explicit_questions", [])
         except Exception as e:
             return JSONResponse({"error": str(e)}, status_code=500)
 
         faq_answers = []
         for q in questions:
-            answer = get_faq_answer(q)
+            # Ensure q is a string before passing to get_faq_answer
+            question_str = str(q) if not isinstance(q, str) else q
+            answer = get_faq_answer(question_str)
             faq_answers.append({"question": q, "answer": answer})
 
         # Assemble context
@@ -987,7 +1867,14 @@ async def stream_workflow(workflow_id: str):
     """Stream workflow results using Server-Sent Events"""
 
     async def generate():
-        async for update in run_workflow_streaming(workflow_id=workflow_id):
+        async for update in run_workflow_streaming(
+            workflow_id=workflow_id,
+            conversation_thread="",  # Default empty string
+            channel="email",  # Default channel
+            prospect_profile_url="",  # Default empty string
+            prospect_company_url="",  # Default empty string
+            prospect_company_website="",  # Default empty string
+        ):
             yield f"data: {json.dumps(update)}\n\n"
 
     return StreamingResponse(generate(), media_type="text/plain")
@@ -1064,10 +1951,77 @@ async def get_cache_stats():
     return cache_manager.get_stats()
 
 
-@app.get("/api/execution-history")
-async def get_execution_history():
-    """Get workflow execution history"""
-    return {"executions": execution_history}
+@app.get("/api/execution-history",
+         summary="Get workflow execution history with pagination",
+         description="Retrieve workflow execution history with pagination support")
+async def get_execution_history(
+    pagination: dict = Depends(pagination_params)
+):
+    """
+    Get workflow execution history with pagination
+    
+    Args:
+        pagination: Pagination parameters (page, page_size)
+        
+    Returns:
+        PaginatedResponse: Paginated execution history
+    """
+    # Use ExecutionManager for unified data access
+    try:
+        history_items = execution_manager.get_all_executions(limit=1000)
+        log_info(logger, f"Retrieved {len(history_items)} executions from ExecutionManager")
+    except Exception as e:
+        log_error(logger, f"Failed to get executions from ExecutionManager: {e}")
+        history_items = []
+    
+    # Ensure frontend compatibility - standardize field names
+    transformed_items = []
+    for item in history_items:
+        # Convert to dict if it's not already
+        if hasattr(item, '_asdict'):
+            item = item._asdict()
+        elif not isinstance(item, dict):
+            item = dict(item)
+        
+        # Ensure consistent field naming for frontend compatibility
+        # Always provide both 'output_data' (standard) and 'output' (legacy frontend support)
+        if 'output_data' in item:
+            item['output'] = item['output_data']  # Frontend compatibility
+        elif 'output' in item:
+            item['output_data'] = item['output']  # Database consistency
+        else:
+            item['output_data'] = {}
+            item['output'] = {}
+        
+        # Ensure all required fields exist
+        item.setdefault('status', 'unknown')
+        item.setdefault('workflow_name', 'Unknown Workflow')
+        item.setdefault('progress', 0)
+        
+        transformed_items.append(item)
+    
+    # Apply pagination
+    paginated_response = Paginator.paginate_list(
+        items=transformed_items,
+        page=pagination["page"],
+        page_size=pagination["page_size"]
+    )
+    
+    # Transform response to match frontend expectations
+    result = paginated_response.dict()
+    
+    # Flatten pagination data for frontend compatibility
+    flattened_result = {
+        "items": result["items"],
+        "total": result["pagination"]["total"],
+        "page": result["pagination"]["page"],
+        "page_size": result["pagination"]["page_size"],
+        "total_pages": result["pagination"]["total_pages"],
+        "has_next": result["pagination"]["has_next"],
+        "has_prev": result["pagination"]["has_prev"]
+    }
+    
+    return flattened_result
 
 @app.post("/api/demo-execution")
 async def create_demo_execution():
@@ -1130,7 +2084,7 @@ async def create_demo_execution():
             ],
             "quality_score": 94,
             "predicted_response_rate": 0.48,
-            "has_follow_ups": true
+            "has_follow_ups": True
         }
     }
     
@@ -1138,16 +2092,30 @@ async def create_demo_execution():
     return JSONResponse({"message": "Demo execution created", "execution_id": demo_execution['id']})
 
 
-@app.get("/api/test-results")
-async def get_test_results():
-    """Get test results based on actual execution history"""
+@app.get("/api/test-results",
+         summary="Get test results with pagination",
+         description="Retrieve test results based on actual execution history with pagination support")
+async def get_test_results(
+    pagination: dict = Depends(pagination_params)
+):
+    """
+    Get test results based on actual execution history with pagination
+    
+    Args:
+        pagination: Pagination parameters (page, page_size)
+        
+    Returns:
+        PaginatedResponse: Paginated test results
+    """
     from datetime import datetime, timedelta
     
     # Get actual execution history
     completed_executions = [exec for exec in execution_history if exec.get('status') == 'completed']
     
     if not completed_executions:
-        return []
+        return {"items": [], "pagination": {"total": 0, "page": pagination["page"],
+                "page_size": pagination["page_size"], "total_pages": 0,
+                "has_next": False, "has_prev": False}}
     
     test_results = []
     
@@ -1309,7 +2277,14 @@ async def get_test_results():
             ]
         })
     
-    return {"test_results": test_results}
+    # Apply pagination to test results
+    paginated_response = Paginator.paginate_list(
+        items=test_results,
+        page=pagination["page"],
+        page_size=pagination["page_size"]
+    )
+    
+    return paginated_response.dict()
 
 
 @app.post("/cache/clear")
@@ -1325,28 +2300,52 @@ async def clear_cache(
 
 
 # FAQ Management Endpoints
-@app.get("/api/faq")
-async def get_all_faqs():
-    """Get all FAQ entries"""
+@app.get("/api/faq",
+         summary="Get all FAQ entries with pagination",
+         description="Retrieve FAQ entries with pagination support")
+async def get_all_faqs(
+    pagination: dict = Depends(pagination_params)
+):
+    """
+    Get all FAQ entries with pagination
+    
+    Args:
+        pagination: Pagination parameters (page, page_size)
+        
+    Returns:
+        PaginatedResponse: Paginated FAQ entries
+    """
     from faq import get_all_faq_topics
-    return get_all_faq_topics()
+    from pagination import Paginator
+    
+    # Get all FAQs
+    all_faqs = get_all_faq_topics()
+    
+    # Apply pagination
+    paginated_response = Paginator.paginate_list(
+        items=all_faqs,
+        page=pagination["page"],
+        page_size=pagination["page_size"]
+    )
+    
+    return paginated_response.dict()
 
 
 class FAQCreateRequest(BaseModel):
     question: str = Field(
-        ...,
+        default=...,
         description="The FAQ question",
         min_length=5,
         max_length=500
     )
     answer: str = Field(
-        ...,
+        default=...,
         description="The FAQ answer", 
         min_length=10,
         max_length=5000
     )
     category: str = Field(
-        ...,
+        default=...,
         description="FAQ category",
         min_length=1,
         max_length=100

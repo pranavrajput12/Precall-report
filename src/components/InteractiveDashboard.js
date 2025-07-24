@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ReactFlow,
   MiniMap,
@@ -43,7 +43,8 @@ const api = {
   },
   
   executeWorkflow: async (workflowId, inputData) => {
-    const response = await fetch(`/api/workflows/${workflowId}/execute`, {
+    // Use the same endpoint as RunWorkflow component
+    const response = await fetch('/run', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(inputData)
@@ -221,6 +222,7 @@ const nodeTypes = {
 };
 
 function InteractiveDashboard() {
+  const queryClient = useQueryClient();
   const [selectedWorkflow, setSelectedWorkflow] = useState(null);
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -450,15 +452,19 @@ function InteractiveDashboard() {
     setExecutionResults([]);
 
     try {
-      // Call backend API to execute workflow
-      const response = await fetch('/api/workflows/execute', {
+      // Call backend API to execute workflow (use same endpoint as RunWorkflow)
+      const response = await fetch('/run', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          workflow_id: selectedWorkflow.id,
-          input_data: inputs
+          conversation_thread: inputs.conversation_thread || '',
+          channel: inputs.channel || 'linkedin',
+          prospect_profile_url: inputs.prospect_profile_url || '',
+          prospect_company_url: inputs.prospect_company_url || '',
+          prospect_company_website: inputs.prospect_company_website || '',
+          qubit_context: inputs.qubit_context || ''
         })
       });
 
@@ -617,6 +623,12 @@ All steps completed with high-quality outputs. Message is ready for outreach.`
             : node
         )
       );
+
+      // Invalidate React Query caches to refresh data across pages
+      queryClient.invalidateQueries({ queryKey: ['all-runs'] });
+      queryClient.invalidateQueries({ queryKey: ['performance-metrics'] });
+      queryClient.invalidateQueries({ queryKey: ['agent-performance'] });
+      queryClient.invalidateQueries({ queryKey: ['system-performance'] });
 
       setIsExecuting(false);
       

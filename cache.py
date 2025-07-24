@@ -2,24 +2,75 @@ import hashlib
 import json
 import logging
 import os
+import threading
 import time
 from datetime import datetime
 from functools import wraps
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Mapping, Optional
 
 import redis
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# Import standardized logging configuration
+from logging_config import log_info, log_error, log_warning, log_debug
+from config_system import config_system
+
 logger = logging.getLogger(__name__)
+
+
+class CacheConfig:
+    """Configuration for cache settings loaded from config system"""
+    
+    def __init__(self):
+        # Load cache settings from configuration
+        cache_config = config_system.get("cache", {})
+        
+        # Default TTL values (in seconds)
+        self.default_ttl = cache_config.get("default_ttl", 3600)  # 1 hour
+        self.profile_ttl = cache_config.get("profile_ttl", 7200)  # 2 hours
+        self.faq_ttl = cache_config.get("faq_ttl", 86400)  # 24 hours
+        self.workflow_ttl = cache_config.get("workflow_ttl", 3600)  # 1 hour
+        self.session_ttl = cache_config.get("session_ttl", 3600)  # 1 hour
+        
+        # Semantic similarity settings
+        self.similarity_threshold = cache_config.get("similarity_threshold", 0.85)
+        self.similarity_model = cache_config.get("similarity_model", "all-MiniLM-L6-v2")
+        
+        # Cache monitoring settings
+        self.enable_monitoring = cache_config.get("enable_monitoring", True)
+        self.monitoring_interval = cache_config.get("monitoring_interval", 60)  # 1 minute
+        
+        # Cache warming settings
+        self.enable_cache_warming = cache_config.get("enable_cache_warming", False)
+        self.warming_interval = cache_config.get("warming_interval", 3600)  # 1 hour
+        
+        # Adaptive TTL settings
+        self.enable_adaptive_ttl = cache_config.get("enable_adaptive_ttl", True)
+        self.min_ttl = cache_config.get("min_ttl", 300)  # 5 minutes
+        self.max_ttl = cache_config.get("max_ttl", 86400 * 7)  # 7 days
+        self.ttl_multiplier = cache_config.get("ttl_multiplier", 2.0)
+        
+        # Cache eviction policy
+        self.eviction_policy = cache_config.get("eviction_policy", "lru")
+        self.max_memory = cache_config.get("max_memory", "100mb")
+        
+        log_info(logger, "Cache configuration loaded")
+
+
+# Global cache configuration
+cache_config = CacheConfig()
 
 
 class CacheManager:
     """
-    Enhanced Redis cache manager with advanced features
+    Enhanced Redis cache manager with advanced features including:
+    - Adaptive TTL based on access patterns
+    - Comprehensive cache monitoring
+    - Configurable cache settings
+    - Optimized cache eviction policies
     """
 
     def __init__(self):
+        # Initialize Redis client
         self.redis_client = redis.Redis(
             host=os.getenv("REDIS_HOST", "localhost"),
             port=int(os.getenv("REDIS_PORT", 6379)),
@@ -29,46 +80,185 @@ class CacheManager:
             socket_timeout=5,
             retry_on_timeout=True,
         )
+        
+        # Initialize cache metrics
+        self.hit_count = 0
+        self.miss_count = 0
+        self.access_counts = {}  # Track access frequency by key
+        self.last_access_time = {}  # Track last access time by key
+        
+        # Set up monitoring thread if enabled
+        if cache_config.enable_monitoring:
+            self.monitoring_thread = threading.Thread(
+                target=self._monitor_cache_performance,
+                daemon=True
+            )
+            self.is_monitoring = True
+        else:
+            self.monitoring_thread = None
+            self.is_monitoring = False
 
         # Test connection
         try:
             self.redis_client.ping()
-            logger.info("Redis connection established successfully")
+            log_info(logger, "Redis connection established successfully")
+            
+            # Configure Redis with the eviction policy from config
+            if cache_config.eviction_policy:
+                try:
+                    self.redis_client.config_set(
+                        "maxmemory-policy",
+                        cache_config.eviction_policy
+                    )
+                    self.redis_client.config_set(
+                        "maxmemory",
+                        cache_config.max_memory
+                    )
+                    log_info(logger, f"Redis configured with eviction policy: {cache_config.eviction_policy}")
+                except redis.RedisError as e:
+                    log_warning(logger, f"Failed to set Redis eviction policy: {e}")
+            
+            # Start monitoring thread if enabled
+            if self.monitoring_thread:
+                self.monitoring_thread.start()
+                log_info(logger, "Cache monitoring started")
+                
         except redis.ConnectionError:
-            logger.error("Failed to connect to Redis")
+            log_error(logger, "Failed to connect to Redis")
             self.redis_client = None
+            self.is_monitoring = False
 
     def _generate_cache_key(self, prefix: str, *args, **kwargs) -> str:
-        """Generate a consistent cache key from function arguments"""
+        """
+        Generate a consistent cache key from function arguments.
+        
+        This method creates a deterministic cache key by combining a prefix with
+        the function arguments. The key is hashed using MD5 to ensure a fixed length
+        and to avoid any special characters that might cause issues with Redis.
+        
+        Args:
+            prefix (str): A prefix to identify the type of cached data
+            *args: Positional arguments to include in the key
+            **kwargs: Keyword arguments to include in the key
+            
+        Returns:
+            str: A hexadecimal MD5 hash that serves as the cache key
+        """
         # Create a string representation of all arguments
         key_data = f"{prefix}:{args}:{sorted(kwargs.items())}"
         # Hash it to create a consistent key
         return hashlib.md5(key_data.encode()).hexdigest()
 
     def get(self, key: str) -> Optional[Any]:
-        """Get value from cache"""
+        """
+        Get value from cache.
+        
+        Retrieves a value from the Redis cache by key. The value is assumed to be
+        JSON-serialized and will be deserialized before returning. If the Redis
+        client is not available or any error occurs, None is returned.
+        
+        This method also tracks access patterns for adaptive TTL and cache warming.
+        
+        Args:
+            key (str): The cache key to retrieve
+            
+        Returns:
+            Optional[Any]: The deserialized cached value, or None if not found or on error
+            
+        Raises:
+            No exceptions are raised; errors are logged and None is returned
+        """
         if not self.redis_client:
             return None
 
         try:
             cached_value = self.redis_client.get(key)
             if cached_value:
+                # Track access for adaptive TTL
+                self.access_counts[key] = self.access_counts.get(key, 0) + 1
+                self.last_access_time[key] = time.time()
+                
+                # If adaptive TTL is enabled, extend TTL for frequently accessed keys
+                if cache_config.enable_adaptive_ttl:
+                    access_count = self.access_counts.get(key, 0)
+                    if access_count > 5:  # Only extend TTL for frequently accessed keys
+                        current_ttl = self.redis_client.ttl(key)
+                        if current_ttl > 0:  # Only adjust if key exists and has TTL
+                            # Calculate new TTL based on access frequency
+                            new_ttl = min(
+                                current_ttl * 1.5,  # Increase TTL by 50%
+                                cache_config.max_ttl
+                            )
+                            self.redis_client.expire(key, int(new_ttl))
+                            log_debug(logger, f"Extended TTL for frequently accessed key {key}: {current_ttl}s -> {int(new_ttl)}s")
+                
+                # Increment hit counter
+                self.hit_count += 1
+                
                 return json.loads(cached_value)
+            else:
+                # Increment miss counter
+                self.miss_count += 1
         except (redis.RedisError, json.JSONDecodeError) as e:
-            logger.error(f"Cache get error: {e}")
+            log_error(logger, "Cache get error", e)
 
         return None
 
     def set(self, key: str, value: Any, ttl: int = 3600) -> bool:
-        """Set value in cache with TTL"""
+        """
+        Set value in cache with TTL (Time-To-Live).
+        
+        Stores a value in the Redis cache with the specified key and TTL.
+        The value is JSON-serialized before storage. If the Redis client
+        is not available or any error occurs, False is returned.
+        
+        This method implements adaptive TTL based on configuration settings.
+        
+        Args:
+            key (str): The cache key to store the value under
+            value (Any): The value to store (must be JSON-serializable)
+            ttl (int, optional): Time-to-live in seconds. Defaults to 3600 (1 hour).
+            
+        Returns:
+            bool: True if the value was successfully stored, False otherwise
+            
+        Raises:
+            No exceptions are raised; errors are logged and False is returned
+        """
         if not self.redis_client:
             return False
 
+        # Use default TTL from config if specified
+        if ttl == 3600 and cache_config.default_ttl != 3600:
+            ttl = cache_config.default_ttl
+            
+        # Apply adaptive TTL if enabled
+        if cache_config.enable_adaptive_ttl:
+            # Check if this is a frequently accessed key
+            access_count = self.access_counts.get(key, 0)
+            if access_count > 0:
+                # Adjust TTL based on access frequency
+                ttl_multiplier = min(access_count / 5, cache_config.ttl_multiplier)
+                ttl = min(
+                    int(ttl * ttl_multiplier),
+                    cache_config.max_ttl
+                )
+                ttl = max(ttl, cache_config.min_ttl)  # Ensure minimum TTL
+                log_debug(logger, f"Using adaptive TTL for key {key}: {ttl}s (access count: {access_count})")
+
         try:
             serialized_value = json.dumps(value, default=str)
-            return self.redis_client.setex(key, ttl, serialized_value)
-        except (redis.RedisError, json.JSONEncodeError) as e:
-            logger.error(f"Cache set error: {e}")
+            result = self.redis_client.setex(key, ttl, serialized_value)
+            
+            # Initialize access tracking for new keys
+            if key not in self.access_counts:
+                self.access_counts[key] = 0
+            if key not in self.last_access_time:
+                self.last_access_time[key] = time.time()
+                
+            return result
+        except (redis.RedisError, TypeError, ValueError) as e:
+            log_error(logger, "Cache set error", e)
             return False
 
     def delete(self, key: str) -> bool:
@@ -79,7 +269,7 @@ class CacheManager:
         try:
             return bool(self.redis_client.delete(key))
         except redis.RedisError as e:
-            logger.error(f"Cache delete error: {e}")
+            log_error(logger, "Cache delete error", e)
             return False
 
     def exists(self, key: str) -> bool:
@@ -90,7 +280,7 @@ class CacheManager:
         try:
             return bool(self.redis_client.exists(key))
         except redis.RedisError as e:
-            logger.error(f"Cache exists error: {e}")
+            log_error(logger, "Cache exists error", e)
             return False
 
     def flush_pattern(self, pattern: str) -> int:
@@ -104,7 +294,7 @@ class CacheManager:
                 return self.redis_client.delete(*keys)
             return 0
         except redis.RedisError as e:
-            logger.error(f"Cache flush pattern error: {e}")
+            log_error(logger, "Cache flush pattern error", e)
             return 0
 
     def get_stats(self) -> Dict[str, Any]:
@@ -134,15 +324,122 @@ class CacheManager:
                 "hit_rate": self._calculate_hit_rate(info),
             }
         except redis.RedisError as e:
-            logger.error(f"Cache stats error: {e}")
+            log_error(logger, "Cache stats error", e)
             return {"status": "error", "error": str(e)}
 
-    def _calculate_hit_rate(self, info: Dict) -> float:
+    def _calculate_hit_rate(self, info: Mapping[str, Any]) -> float:
         """Calculate cache hit rate"""
         hits = info.get("keyspace_hits", 0)
         misses = info.get("keyspace_misses", 0)
         total = hits + misses
         return (hits / total * 100) if total > 0 else 0.0
+        
+    def _monitor_cache_performance(self):
+        """
+        Monitor cache performance in a background thread.
+        
+        This method runs in a separate thread and periodically:
+        1. Collects cache performance metrics
+        2. Logs cache statistics
+        3. Identifies hot keys (frequently accessed)
+        4. Adjusts TTL for frequently accessed keys
+        5. Pre-warms cache for predictable access patterns
+        """
+        while self.is_monitoring:
+            try:
+                # Sleep at the beginning to allow initial setup
+                time.sleep(cache_config.monitoring_interval)
+                
+                if not self.redis_client:
+                    continue
+                    
+                # Get cache stats
+                stats = self.get_stats()
+                
+                # Log cache performance
+                hit_rate = stats.get("hit_rate", 0)
+                log_info(logger, f"Cache performance: {hit_rate:.1f}% hit rate, "
+                         f"{stats.get('keyspace_hits', 0)} hits, "
+                         f"{stats.get('keyspace_misses', 0)} misses")
+                
+                # Identify hot keys (frequently accessed)
+                hot_keys = sorted(
+                    self.access_counts.items(),
+                    key=lambda x: x[1],
+                    reverse=True
+                )[:10]  # Top 10 most accessed keys
+                
+                if hot_keys:
+                    log_debug(logger, f"Hot keys: {', '.join([k for k, _ in hot_keys[:5]])}")
+                
+                # Adjust TTL for frequently accessed keys if adaptive TTL is enabled
+                if cache_config.enable_adaptive_ttl and hot_keys:
+                    for key, count in hot_keys:
+                        try:
+                            # Get current TTL
+                            current_ttl = self.redis_client.ttl(key)
+                            if current_ttl > 0:  # Only adjust if key exists and has TTL
+                                # Calculate new TTL based on access frequency
+                                # More frequently accessed keys get longer TTL
+                                new_ttl = min(
+                                    current_ttl * cache_config.ttl_multiplier,
+                                    cache_config.max_ttl
+                                )
+                                self.redis_client.expire(key, int(new_ttl))
+                                log_debug(logger, f"Adjusted TTL for hot key {key}: {current_ttl}s -> {int(new_ttl)}s")
+                        except redis.RedisError:
+                            pass
+                
+                # Pre-warm cache if enabled
+                if cache_config.enable_cache_warming:
+                    self._warm_cache()
+                    
+                # Clean up old entries in access tracking
+                current_time = time.time()
+                keys_to_remove = []
+                for key, last_access in list(self.last_access_time.items()):
+                    # Remove tracking for keys not accessed in the last day
+                    if current_time - last_access > 86400:
+                        keys_to_remove.append(key)
+                
+                for key in keys_to_remove:
+                    if key in self.access_counts:
+                        del self.access_counts[key]
+                    if key in self.last_access_time:
+                        del self.last_access_time[key]
+                
+                if keys_to_remove:
+                    log_debug(logger, f"Cleaned up tracking for {len(keys_to_remove)} inactive keys")
+                    
+            except Exception as e:
+                log_error(logger, f"Cache monitoring error: {str(e)}")
+                
+    def _warm_cache(self):
+        """
+        Pre-warm cache for predictable access patterns.
+        
+        This method identifies patterns in cache access and pre-loads
+        data that is likely to be accessed soon.
+        """
+        if not self.redis_client:
+            return
+            
+        try:
+            # Simple implementation: refresh TTL for recently accessed keys
+            recent_keys = list(self.last_access_time.items())
+            recent_keys.sort(key=lambda x: x[1], reverse=True)  # Sort by most recent access
+            
+            # Refresh TTL for top 20 most recently accessed keys
+            for key, _ in recent_keys[:20]:
+                if self.redis_client and self.redis_client.exists(key):
+                    # Get current TTL
+                    current_ttl = self.redis_client.ttl(key)
+                    if 0 < current_ttl < cache_config.default_ttl / 2:
+                        # If TTL is less than half the default, refresh it
+                        self.redis_client.expire(key, cache_config.default_ttl)
+                        log_debug(logger, f"Refreshed TTL for key {key}")
+        except Exception as e:
+            log_error(logger, f"Cache warming error: {str(e)}")
 
 
 # Global cache instance
@@ -170,13 +467,13 @@ def cache_result(ttl: int = 3600, key_prefix: str = "default"):
             # Try to get from cache
             cached_result = cache_manager.get(cache_key)
             if cached_result is not None:
-                logger.info(f"Cache hit for {func.__name__}")
+                log_info(logger, f"Cache hit for {func.__name__}")
                 return cached_result
 
             # Execute function and cache result
             result = func(*args, **kwargs)
             cache_manager.set(cache_key, result, ttl)
-            logger.info(f"Cache miss for {func.__name__}, result cached")
+            log_info(logger, f"Cache miss for {func.__name__}, result cached")
 
             return result
 
@@ -205,13 +502,13 @@ def async_cache_result(ttl: int = 3600, key_prefix: str = "default"):
             # Try to get from cache
             cached_result = cache_manager.get(cache_key)
             if cached_result is not None:
-                logger.info(f"Cache hit for {func.__name__}")
+                log_info(logger, f"Cache hit for {func.__name__}")
                 return cached_result
 
             # Execute function and cache result
             result = await func(*args, **kwargs)
             cache_manager.set(cache_key, result, ttl)
-            logger.info(f"Cache miss for {func.__name__}, result cached")
+            log_info(logger, f"Cache miss for {func.__name__}, result cached")
 
             return result
 
@@ -354,8 +651,8 @@ class RateLimiter:
 
             return current_requests < limit
 
-        except redis.RedisError:
-            logger.error(f"Rate limiter error: {e}")
+        except redis.RedisError as e:
+            log_error(logger, "Rate limiter error", e)
             return True  # Allow if error occurs
 
 
@@ -372,8 +669,8 @@ class MetricsCollector:
         try:
             key = f"metrics:counter:{metric_name}"
             cache_manager.redis_client.incrby(key, value)
-        except redis.RedisError:
-            logger.error(f"Metrics increment error: {e}")
+        except redis.RedisError as e:
+            log_error(logger, "Metrics increment error", e)
 
     @staticmethod
     def record_timing(metric_name: str, duration: float) -> None:
@@ -388,8 +685,8 @@ class MetricsCollector:
 
             # Keep only last 1000 entries
             cache_manager.redis_client.zremrangebyrank(key, 0, -1001)
-        except redis.RedisError:
-            logger.error(f"Metrics timing error: {e}")
+        except redis.RedisError as e:
+            log_error(logger, "Metrics timing error", e)
 
     @staticmethod
     def get_metrics() -> Dict[str, Any]:
@@ -421,8 +718,8 @@ class MetricsCollector:
 
             return metrics
 
-        except redis.RedisError:
-            logger.error(f"Get metrics error: {e}")
+        except redis.RedisError as e:
+            log_error(logger, "Get metrics error", e)
             return {}
 
 
@@ -458,10 +755,10 @@ class SmartWorkflowCache:
             try:
                 self.similarity_model = SentenceTransformer("all-MiniLM-L6-v2")
                 self.similarity_threshold = 0.85  # 85% similarity threshold
-                self.logger.info(
+                log_info(self.logger,
                     "Semantic similarity model loaded successfully")
             except Exception as e:
-                self.logger.warning(
+                log_warning(self.logger,
                     f"Failed to load semantic similarity model: {e}")
                 self.similarity_model = None
         else:
@@ -471,14 +768,24 @@ class SmartWorkflowCache:
     def cache_profile_data(
         self, profile_url: str, company_url: str, data: Dict, ttl: int = 7200
     ):
-        """Cache profile enrichment data (2 hours TTL)"""
+        """Cache profile enrichment data with configurable TTL"""
         if self.redis is None:
             return None
+            
+        # Use profile TTL from config if default is used
+        if ttl == 7200 and cache_config.profile_ttl != 7200:
+            ttl = cache_config.profile_ttl
+            
         key = f"profile:{hashlib.md5(f'{profile_url}:{company_url}'.encode()).hexdigest()}"
+        
+        # Track access for adaptive TTL
+        cache_manager.access_counts[key] = cache_manager.access_counts.get(key, 0) + 1
+        cache_manager.last_access_time[key] = time.time()
+        
         try:
             return self.redis.setex(key, ttl, json.dumps(data))
         except Exception as e:
-            self.logger.warning(f"Cache storage failed: {e}")
+            log_warning(self.logger, f"Cache storage failed: {e}")
             return None
 
     def get_cached_profile_data(
@@ -487,23 +794,79 @@ class SmartWorkflowCache:
         """Get cached profile enrichment data"""
         if self.redis is None:
             return None
+            
         key = f"profile:{hashlib.md5(f'{profile_url}:{company_url}'.encode()).hexdigest()}"
+        
+        # Track access for adaptive TTL
+        if self.redis.exists(key):
+            cache_manager.access_counts[key] = cache_manager.access_counts.get(key, 0) + 1
+            cache_manager.last_access_time[key] = time.time()
+            
+            # If adaptive TTL is enabled, extend TTL for frequently accessed keys
+            if cache_config.enable_adaptive_ttl:
+                access_count = cache_manager.access_counts.get(key, 0)
+                if access_count > 5:  # Only extend TTL for frequently accessed keys
+                    current_ttl = self.redis.ttl(key)
+                    if current_ttl > 0:  # Only adjust if key exists and has TTL
+                        # Calculate new TTL based on access frequency
+                        new_ttl = min(
+                            current_ttl * 1.5,  # Increase TTL by 50%
+                            cache_config.max_ttl
+                        )
+                        self.redis.expire(key, int(new_ttl))
+                        log_debug(logger, f"Extended TTL for frequently accessed profile: {current_ttl}s -> {int(new_ttl)}s")
+        
         try:
             cached_data = self.redis.get(key)
             if cached_data:
                 return json.loads(cached_data)
         except Exception as e:
-            self.logger.warning(f"Cache retrieval failed: {e}")
+            log_warning(self.logger, f"Cache retrieval failed: {e}")
         return None
 
     def cache_faq_answer(self, question: str, answer: str, ttl: int = 86400):
-        """Cache FAQ answers (24 hours TTL)"""
+        """Cache FAQ answers with configurable TTL"""
+        if self.redis is None:
+            return None
+            
+        # Use FAQ TTL from config if default is used
+        if ttl == 86400 and cache_config.faq_ttl != 86400:
+            ttl = cache_config.faq_ttl
+            
         key = f"faq:{hashlib.md5(question.encode()).hexdigest()}"
+        
+        # Track access for adaptive TTL
+        cache_manager.access_counts[key] = cache_manager.access_counts.get(key, 0) + 1
+        cache_manager.last_access_time[key] = time.time()
+        
         return self.redis.setex(key, ttl, answer)
 
     def get_cached_faq_answer(self, question: str) -> Optional[str]:
         """Get cached FAQ answer"""
+        if self.redis is None:
+            return None
+            
         key = f"faq:{hashlib.md5(question.encode()).hexdigest()}"
+        
+        # Track access for adaptive TTL
+        if self.redis.exists(key):
+            cache_manager.access_counts[key] = cache_manager.access_counts.get(key, 0) + 1
+            cache_manager.last_access_time[key] = time.time()
+            
+            # If adaptive TTL is enabled, extend TTL for frequently accessed keys
+            if cache_config.enable_adaptive_ttl:
+                access_count = cache_manager.access_counts.get(key, 0)
+                if access_count > 5:  # Only extend TTL for frequently accessed keys
+                    current_ttl = self.redis.ttl(key)
+                    if current_ttl > 0:  # Only adjust if key exists and has TTL
+                        # Calculate new TTL based on access frequency
+                        new_ttl = min(
+                            current_ttl * 1.5,  # Increase TTL by 50%
+                            cache_config.max_ttl
+                        )
+                        self.redis.expire(key, int(new_ttl))
+                        log_debug(logger, f"Extended TTL for frequently accessed FAQ: {current_ttl}s -> {int(new_ttl)}s")
+        
         return self.redis.get(key)
 
     def cache_workflow_result(
@@ -511,13 +874,48 @@ class SmartWorkflowCache:
             workflow_id: str,
             result: Dict,
             ttl: int = 3600):
-        """Cache complete workflow results (1 hour TTL)"""
+        """Cache complete workflow results with configurable TTL"""
+        if self.redis is None:
+            return None
+            
+        # Use workflow TTL from config if default is used
+        if ttl == 3600 and cache_config.workflow_ttl != 3600:
+            ttl = cache_config.workflow_ttl
+            
         key = f"workflow_result:{workflow_id}"
+        
+        # Track access for adaptive TTL
+        cache_manager.access_counts[key] = cache_manager.access_counts.get(key, 0) + 1
+        cache_manager.last_access_time[key] = time.time()
+        
         return self.redis.setex(key, ttl, json.dumps(result))
 
     def get_cached_workflow_result(self, workflow_id: str) -> Optional[Dict]:
         """Get cached workflow result"""
+        if self.redis is None:
+            return None
+            
         key = f"workflow_result:{workflow_id}"
+        
+        # Track access for adaptive TTL
+        if self.redis.exists(key):
+            cache_manager.access_counts[key] = cache_manager.access_counts.get(key, 0) + 1
+            cache_manager.last_access_time[key] = time.time()
+            
+            # If adaptive TTL is enabled, extend TTL for frequently accessed keys
+            if cache_config.enable_adaptive_ttl:
+                access_count = cache_manager.access_counts.get(key, 0)
+                if access_count > 5:  # Only extend TTL for frequently accessed keys
+                    current_ttl = self.redis.ttl(key)
+                    if current_ttl > 0:  # Only adjust if key exists and has TTL
+                        # Calculate new TTL based on access frequency
+                        new_ttl = min(
+                            current_ttl * 1.5,  # Increase TTL by 50%
+                            cache_config.max_ttl
+                        )
+                        self.redis.expire(key, int(new_ttl))
+                        log_debug(logger, f"Extended TTL for frequently accessed workflow {workflow_id}: {current_ttl}s -> {int(new_ttl)}s")
+        
         cached_data = self.redis.get(key)
         if cached_data:
             return json.loads(cached_data)
@@ -539,11 +937,11 @@ class SmartWorkflowCache:
             embedding = self.similarity_model.encode([clean_text])
             return embedding[0]
         except Exception as e:
-            logger.error(f"Error generating embedding: {e}")
+            log_error(logger, "Error generating embedding", e)
             return None
 
     def _find_similar_cached_results(
-        self, conversation_thread: str, channel: str, threshold: float = None
+        self, conversation_thread: str, channel: str, threshold: Optional[float] = None
     ) -> Optional[Dict[str, Any]]:
         """Find cached results for similar conversations"""
         if not self.similarity_model:
@@ -596,18 +994,17 @@ class SmartWorkflowCache:
                             best_result = result_data
 
                 except Exception as e:
-                    self.logger.warning(
+                    log_warning(self.logger,
                         f"Error processing cached embedding {key}: {e}")
                     continue
 
             if best_result:
-                self.logger.info(
-                    f"Found similar cached result with {best_similarity:.3f} similarity"
-                )
+                log_info(self.logger,
+                    f"Found similar cached result with {best_similarity:.3f} similarity")
                 return best_result
 
         except Exception as e:
-            self.logger.error(f"Error in semantic similarity search: {e}")
+            log_error(self.logger, "Error in semantic similarity search", e)
 
         return None
 
@@ -636,13 +1033,21 @@ class SmartWorkflowCache:
         result: Dict[str, Any],
         conversation_thread: str,
         channel: str,
+        ttl: int = 3600
     ):
-        """Cache workflow result with semantic embedding"""
+        """Cache workflow result with semantic embedding and configurable TTL"""
+        if self.redis is None:
+            return None
+            
+        # Use workflow TTL from config if default is used
+        if ttl == 3600 and cache_config.workflow_ttl != 3600:
+            ttl = cache_config.workflow_ttl
+            
         # Standard caching
-        self.cache_workflow_result(workflow_id, result)
+        self.cache_workflow_result(workflow_id, result, ttl)
 
         # Semantic caching
-        if self.similarity_model:
+        if self.similarity_model and self.redis:
             try:
                 embedding = self._get_conversation_embedding(
                     conversation_thread)
@@ -658,16 +1063,20 @@ class SmartWorkflowCache:
                         "timestamp": time.time(),
                     }
 
-                    # Store with TTL
+                    # Store with TTL - use double the workflow TTL for embeddings
+                    embedding_ttl = min(ttl * 2, cache_config.max_ttl)
                     self.redis.setex(
-                        embedding_key, 7200, json.dumps(
-                            embedding_data)  # 2 hours
+                        embedding_key, embedding_ttl, json.dumps(embedding_data)
                     )
 
-                    self.logger.info(
-                        f"Cached semantic embedding for {workflow_id}")
+                    # Track access for adaptive TTL
+                    cache_manager.access_counts[embedding_key] = cache_manager.access_counts.get(embedding_key, 0) + 1
+                    cache_manager.last_access_time[embedding_key] = time.time()
+
+                    log_info(self.logger,
+                        f"Cached semantic embedding for {workflow_id} with TTL {embedding_ttl}s")
             except Exception as e:
-                self.logger.error(f"Error caching semantic embedding: {e}")
+                log_error(self.logger, "Error caching semantic embedding", e)
 
 
 # Update the global cache instance

@@ -1,0 +1,86 @@
+{
+  "app": {
+    "debug": false,
+    "host": "0.0.0.0",
+    "cors_origins": ["https://your-production-domain.com", "https://crewai-platform.com"]
+  },
+  "logging": {
+    "level": "WARNING",
+    "file": "/var/log/crewai/crewai.log"
+  },
+  "llm": {
+    "temperature": 0.5,
+    "max_tokens": 1000
+  },
+  "agents": {
+    "max_rpm": 20,
+    "cache_enabled": true,
+    "cache_expiry": 7200
+  },
+  "workflow": {
+    "max_concurrent_tasks": 10,
+    "timeout": 600,
+    "retry_attempts": 5,
+    "cache_enabled": true
+  },
+  "database": {
+    "type": "postgresql",
+    "postgres_host": "postgres",
+    "postgres_port": 5432,
+    "postgres_user": "crewai_prod",
+    "postgres_database": "crewai_production",
+    "pool_size": 20,
+    "max_overflow": 30,
+    "pool_timeout": 60,
+    "auto_migrate": false,
+    "backup_before_migrate": true
+  },
+  "cache": {
+    "type": "redis",
+    "redis_url": "redis://redis:6379/0",
+    "host": "redis",
+    "port": 6379,
+    "db": 0,
+    "max_connections": 50,
+    "connection_timeout": 10,
+    "socket_timeout": 10,
+    "default_ttl": 86400,
+    "key_prefix": "crewai:prod:",
+    "health_check_interval": 60,
+    "max_retries": 5,
+    "retry_delay": 2,
+    "enable_fallback": false
+  },
+  "observability": {
+    "enabled": true,
+    "sentry_environment": "production",
+    "sentry_sample_rate": 0.1,
+    "sentry_traces_sample_rate": 0.05,
+    "sentry_profiles_sample_rate": 0.01,
+    "trace_sample_rate": 0.1,
+    "exporter": "jaeger",
+    "jaeger_endpoint": "http://jaeger:14268/api/traces",
+    "otlp_endpoint": "http://otel-collector:4317",
+    "metrics_enabled": true,
+    "metrics_port": 8090,
+    "enable_performance_monitoring": true,
+    "slow_query_threshold": 0.5,
+    "memory_threshold": 0.9
+  },
+  "security": {
+    "api_key_required": true,
+    "jwt_secret": "PRODUCTION-JWT-SECRET-MUST-BE-SET-VIA-ENV-VAR",
+    "use_token_fingerprinting": true,
+    "password_min_length": 12,
+    "max_login_attempts": 3,
+    "lockout_duration": 1800,
+    "demo_admin": {
+      "username": "admin",
+      "password": "DISABLED-IN-PRODUCTION"
+    },
+    "demo_user": {
+      "username": "demo", 
+      "password": "DISABLED-IN-PRODUCTION"
+    }
+  }
+}

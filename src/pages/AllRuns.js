@@ -52,7 +52,7 @@ const AllRuns = () => {
     const matchesSearch = searchTerm === '' || 
       run.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
       run.workflow_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      run.input_data?.prospect_company_url?.toLowerCase().includes(searchTerm.toLowerCase());
+      (run.input_data?.prospect_company_url || '').toLowerCase().includes(searchTerm.toLowerCase());
     return matchesStatus && matchesSearch;
   });
 
@@ -70,19 +70,20 @@ const AllRuns = () => {
 
   const copyAllMessages = () => {
     const allMessages = filteredRuns
-      .filter(run => run.output?.message)
+      .filter(run => (run.output_data || run.output))
       .map(run => {
+        const outputData = run.output_data || run.output || {};
         let messageText = `--- ${run.id} (${new Date(run.started_at).toLocaleString()}) ---\n`;
         // Handle immediate_response object format
-        let immediateText = run.output.immediate_response || run.output.message;
+        let immediateText = outputData.immediate_response || outputData.message;
         if (typeof immediateText === 'object' && immediateText?.message) {
           immediateText = immediateText.message;
         }
         messageText += `IMMEDIATE RESPONSE:\n${immediateText}\n`;
         
-        if (run.output.follow_up_sequence && run.output.follow_up_sequence.length > 0) {
+        if (outputData.follow_up_sequence && outputData.follow_up_sequence.length > 0) {
           messageText += '\nFOLLOW-UP SEQUENCE:\n';
-          run.output.follow_up_sequence.forEach((followup, index) => {
+          outputData.follow_up_sequence.forEach((followup, index) => {
             messageText += `\nFollow-up ${index + 1} (${followup.timing}):\n${followup.message}\n`;
           });
         }
@@ -103,17 +104,18 @@ const AllRuns = () => {
       new Date(run.started_at).toLocaleString(),
       run.duration ? `${run.duration.toFixed(1)}s` : 'N/A',
       run.input_data?.prospect_company_url || '',
-      run.output?.quality_score || '',
+      (run.output_data?.quality_score || run.output?.quality_score) || '',
       (() => {
-        let immediateText = run.output?.immediate_response || run.output?.message || '';
+        const outputData = run.output_data || run.output || {};
+        let immediateText = outputData.immediate_response || outputData.message || '';
         if (typeof immediateText === 'object' && immediateText?.message) {
           immediateText = immediateText.message;
         }
         return immediateText.toString().replace(/\n/g, ' ');
       })(),
-      run.output?.follow_up_sequence?.[0]?.message?.replace(/\n/g, ' ') || '',
-      run.output?.follow_up_sequence?.[1]?.message?.replace(/\n/g, ' ') || '',
-      run.output?.follow_up_sequence?.[2]?.message?.replace(/\n/g, ' ') || ''
+      (run.output_data?.follow_up_sequence || run.output?.follow_up_sequence)?.[0]?.message?.replace(/\n/g, ' ') || '',
+      (run.output_data?.follow_up_sequence || run.output?.follow_up_sequence)?.[1]?.message?.replace(/\n/g, ' ') || '',
+      (run.output_data?.follow_up_sequence || run.output?.follow_up_sequence)?.[2]?.message?.replace(/\n/g, ' ') || ''
     ]);
 
     const csvContent = [
@@ -223,7 +225,7 @@ const AllRuns = () => {
               <p className="text-sm text-gray-600">Avg Quality</p>
               <p className="text-2xl font-bold text-blue-600">
                 {runs.length > 0
-                  ? `${(runs.reduce((acc, r) => acc + (r.output?.quality_score || 0), 0) / runs.length).toFixed(0)}%`
+                  ? `${(runs.reduce((acc, r) => acc + ((r.output_data?.quality_score || r.output?.quality_score) || 0), 0) / runs.length).toFixed(0)}%`
                   : '0%'}
               </p>
             </div>
@@ -328,12 +330,12 @@ const AllRuns = () => {
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(run.status)}`}>
                       {run.status}
                     </span>
-                    {run.output?.quality_score && (
+                    {(run.output_data?.quality_score || run.output?.quality_score) && (
                       <span className="text-sm font-medium text-gray-600">
-                        Quality: {run.output.quality_score}%
+                        Quality: {run.output_data?.quality_score || run.output?.quality_score}%
                       </span>
                     )}
-                    {run.output?.has_follow_ups && (
+                    {(run.output_data?.has_follow_ups || run.output?.has_follow_ups) && (
                       <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full">
                         +3 Follow-ups
                       </span>
@@ -439,7 +441,7 @@ const AllRuns = () => {
                     </div>
                   </div>
 
-                  {(run.output?.message || run.output?.reply || run.output?.immediate_response) && (
+                  {(run.output_data || run.output?.message || run.output?.reply || run.output?.immediate_response) && (
                     <div className="p-4">
                       {(() => {
                         // Parse the output to extract immediate response and follow-ups
@@ -449,21 +451,29 @@ const AllRuns = () => {
                         let predictedResponseRate = null;
                         
                         // Handle different output formats
-                        if (run.output.immediate_response) {
+                        // First check if we have output_data structure from the database
+                        let outputData = run.output_data || run.output || {};
+                        
+                        if (outputData.immediate_response) {
                            // Old format (Lucas Wright style) - handle both string and object formats
-                           if (typeof run.output.immediate_response === 'string') {
-                             immediateResponse = run.output.immediate_response;
-                           } else if (run.output.immediate_response && run.output.immediate_response.message) {
-                             immediateResponse = run.output.immediate_response.message;
+                           if (typeof outputData.immediate_response === 'string') {
+                             immediateResponse = outputData.immediate_response;
+                           } else if (outputData.immediate_response && outputData.immediate_response.message) {
+                             immediateResponse = outputData.immediate_response.message;
                            } else {
-                             immediateResponse = JSON.stringify(run.output.immediate_response);
+                             immediateResponse = JSON.stringify(outputData.immediate_response);
                            }
-                          followUpSequence = run.output.follow_up_sequence || [];
-                          qualityScore = run.output.quality_score;
-                          predictedResponseRate = run.output.predicted_response_rate;
-                        } else if (run.output.reply) {
+                          followUpSequence = outputData.follow_up_sequence || [];
+                          qualityScore = outputData.quality_score;
+                          predictedResponseRate = outputData.predicted_response_rate;
+                        } else if (outputData.reply || outputData.reply_generation) {
                           // New format - parse markdown structure
-                          const replyText = run.output.reply;
+                          // Check both reply and reply_generation fields from workflow results
+                          let replyText = outputData.reply || outputData.reply_generation || '';
+                          // Ensure replyText is a string
+                          if (typeof replyText !== 'string') {
+                            replyText = JSON.stringify(replyText);
+                          }
                           
                           // Extract immediate response
                           const immediateMatch = replyText.match(/## IMMEDIATE RESPONSE\s*([\s\S]*?)(?=##|$)/);
@@ -484,10 +494,10 @@ const AllRuns = () => {
                           });
                           
                           // Extract quality info from quality_assessment if available
-                          if (run.output.quality_assessment) {
+                          if (outputData.quality_assessment || outputData.output_quality) {
                             // Handle nested quality assessment structure
-                            const assessment = run.output.quality_assessment;
-                            const overallAssessment = assessment.overall_assessment;
+                            const assessment = outputData.quality_assessment || outputData.output_quality || {};
+                            const overallAssessment = assessment.overall_assessment || assessment;
                             
                             if (overallAssessment && overallAssessment.overall_quality_score) {
                               // Convert from 0-1 scale to percentage
@@ -504,9 +514,58 @@ const AllRuns = () => {
                                                   overallAssessment?.confidence_score || 
                                                   null;
                           }
+                        } else if (outputData.results) {
+                          // Handle workflow results structure
+                          const results = outputData.results || {};
+                          // Look for reply generation step output
+                          const replyStep = results.reply_generation || results.generate_reply || {};
+                          if (replyStep.result) {
+                            let replyText = replyStep.result;
+                            // Ensure replyText is a string
+                            if (typeof replyText !== 'string') {
+                              replyText = JSON.stringify(replyText);
+                            }
+                            // Parse as new format
+                            const immediateMatch = replyText.match(/## IMMEDIATE RESPONSE\s*([\s\S]*?)(?=##|$)/);
+                            if (immediateMatch) {
+                              immediateResponse = immediateMatch[1].replace(/\[Word Count:.*?\]/g, '').trim();
+                            }
+                            
+                            // Extract follow-ups
+                            const followUpMatches = replyText.matchAll(/### Follow-up (\d+) \(([^)]+)\)\s*([\s\S]*?)(?=###|##|$)/g);
+                            followUpSequence = Array.from(followUpMatches).map(match => {
+                              const message = match[3].replace(/\[Word Count:.*?\]/g, '').trim();
+                              const wordCountMatch = match[3].match(/\[Word Count: (\d+) words\]/);
+                              return {
+                                timing: match[2],
+                                message: message,
+                                word_count: wordCountMatch ? parseInt(wordCountMatch[1]) : null
+                              };
+                            });
+                          }
+                          
+                          // Look for quality assessment in results
+                          const qualityStep = results.output_quality || results.quality_assessment || {};
+                          if (qualityStep.result) {
+                            try {
+                              const qualityData = typeof qualityStep.result === 'string' ? 
+                                JSON.parse(qualityStep.result) : qualityStep.result;
+                              
+                              if (qualityData.overall_quality_score) {
+                                qualityScore = Math.round(qualityData.overall_quality_score * 100);
+                              } else if (qualityData.quality_score) {
+                                qualityScore = qualityData.quality_score;
+                              }
+                              
+                              predictedResponseRate = qualityData.predicted_response_rate || 
+                                                    qualityData.confidence_score || null;
+                            } catch (e) {
+                              console.warn('Failed to parse quality assessment:', e);
+                            }
+                          }
                         } else {
                           // Fallback to message
-                          immediateResponse = run.output.message;
+                          immediateResponse = outputData.message || 'No output available';
                         }
                         
                         return (

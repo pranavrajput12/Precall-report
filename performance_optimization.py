@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from functools import wraps
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 # Performance monitoring
 import GPUtil
@@ -548,29 +548,86 @@ class PerformanceOptimizer:
             ],
         }
 
+    def get_all_performance_metrics(self) -> Dict[str, Any]:
+        """
+        Get all performance metrics with detailed data for pagination
+        
+        Returns:
+            Dict containing summary metrics and detailed metrics list
+        """
+        if not self.performance_metrics:
+            return {
+                "message": "No performance metrics available",
+                "current_metrics": {},
+                "average_metrics": {},
+                "detailed_metrics": [],
+                "monitoring_active": self.is_monitoring
+            }
+            
+        # Calculate averages
+        avg_cpu = sum(m.cpu_usage for m in self.performance_metrics) / len(self.performance_metrics)
+        avg_memory = sum(m.memory_usage for m in self.performance_metrics) / len(self.performance_metrics)
+        avg_gpu = sum(m.gpu_usage for m in self.performance_metrics) / len(self.performance_metrics)
+        avg_gpu_memory = sum(m.gpu_memory for m in self.performance_metrics) / len(self.performance_metrics)
+        
+        # Create detailed metrics list for pagination
+        detailed_metrics = [
+            {
+                "cpu_usage": m.cpu_usage,
+                "memory_usage": m.memory_usage,
+                "gpu_usage": m.gpu_usage,
+                "gpu_memory": m.gpu_memory,
+                "inference_time": m.inference_time,
+                "throughput": m.throughput,
+                "latency": m.latency,
+                "timestamp": m.timestamp.isoformat()
+            }
+            for m in self.performance_metrics
+        ]
+        
+        return {
+            "current_metrics": {
+                "cpu_usage": self.performance_metrics[-1].cpu_usage if self.performance_metrics else 0,
+                "memory_usage": self.performance_metrics[-1].memory_usage if self.performance_metrics else 0,
+                "gpu_usage": self.performance_metrics[-1].gpu_usage if self.performance_metrics else 0,
+                "gpu_memory": self.performance_metrics[-1].gpu_memory if self.performance_metrics else 0,
+            },
+            "average_metrics": {
+                "cpu_usage": avg_cpu,
+                "memory_usage": avg_memory,
+                "gpu_usage": avg_gpu,
+                "gpu_memory": avg_gpu_memory,
+            },
+            "detailed_metrics": detailed_metrics,
+            "metrics_count": len(self.performance_metrics),
+            "monitoring_active": self.is_monitoring,
+        }
+        
     def get_performance_metrics(self, limit: int = 100) -> Dict[str, Any]:
-        """Get recent performance metrics"""
+        """
+        Get recent performance metrics summary (for backward compatibility)
+        
+        Args:
+            limit: Maximum number of metrics to consider
+            
+        Returns:
+            Dict containing summary metrics
+        """
         recent_metrics = self.performance_metrics[-limit:]
 
         if not recent_metrics:
             return {"message": "No performance metrics available"}
 
         # Calculate averages
-        avg_cpu = sum(m.cpu_usage for m in recent_metrics) / \
-            len(recent_metrics)
-        avg_memory = sum(
-            m.memory_usage for m in recent_metrics) / len(recent_metrics)
-        avg_gpu = sum(m.gpu_usage for m in recent_metrics) / \
-            len(recent_metrics)
-        avg_gpu_memory = sum(
-            m.gpu_memory for m in recent_metrics) / len(recent_metrics)
+        avg_cpu = sum(m.cpu_usage for m in recent_metrics) / len(recent_metrics)
+        avg_memory = sum(m.memory_usage for m in recent_metrics) / len(recent_metrics)
+        avg_gpu = sum(m.gpu_usage for m in recent_metrics) / len(recent_metrics)
+        avg_gpu_memory = sum(m.gpu_memory for m in recent_metrics) / len(recent_metrics)
 
         return {
             "current_metrics": {
                 "cpu_usage": recent_metrics[-1].cpu_usage if recent_metrics else 0,
-                "memory_usage": (
-                    recent_metrics[-1].memory_usage if recent_metrics else 0
-                ),
+                "memory_usage": recent_metrics[-1].memory_usage if recent_metrics else 0,
                 "gpu_usage": recent_metrics[-1].gpu_usage if recent_metrics else 0,
                 "gpu_memory": recent_metrics[-1].gpu_memory if recent_metrics else 0,
             },
@@ -622,7 +679,7 @@ def monitor_performance(func):
 
 # Utility functions
 async def optimize_system_performance(
-    optimization_types: List[OptimizationType] = None,
+    optimization_types: Optional[List[OptimizationType]] = None,
 ) -> List[OptimizationResult]:
     """Run comprehensive system optimization"""
 

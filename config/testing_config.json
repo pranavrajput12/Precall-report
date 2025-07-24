@@ -1,0 +1,49 @@
+{
+  "app": {
+    "debug": true,
+    "host": "localhost",
+    "port": 8001,
+    "cors_origins": ["http://localhost:8001", "http://localhost:9000"],
+    "cors_allow_credentials": true
+  },
+  "logging": {
+    "level": "ERROR",
+    "file": "logs/test.log"
+  },
+  "llm": {
+    "provider": "openai",
+    "model": "gpt-3.5-turbo",
+    "temperature": 0.0,
+    "max_tokens": 500
+  },
+  "agents": {
+    "max_iterations": 2,
+    "cache_enabled": false
+  },
+  "workflow": {
+    "max_concurrent_tasks": 1,
+    "timeout": 60,
+    "retry_attempts": 1,
+    "cache_enabled": false
+  },
+  "cache": {
+    "type": "memory",
+    "expiry": 300,
+    "max_size": 100
+  },
+  "faq": {
+    "similarity_threshold": 0.5,
+    "max_results": 2
+  },
+  "observability": {
+    "enabled": false
+  },
+  "evaluation": {
+    "quality_threshold": 0.7,
+    "max_evaluation_tokens": 1000
+  },
+  "security": {
+    "api_key_required": false,
+    "jwt_expiry": 3600
+  }
+}

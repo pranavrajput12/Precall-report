@@ -1,0 +1,152 @@
+{
+  "app": {
+    "name": "CrewAI Workflow Orchestration Platform",
+    "version": "1.0.0",
+    "debug": false,
+    "host": "0.0.0.0",
+    "port": 8000,
+    "api_prefix": "/api/v1",
+    "docs_url": "/docs",
+    "redoc_url": "/redoc",
+    "cors_origins": ["http://localhost:3000", "http://localhost:8000", "http://127.0.0.1:3000", "http://127.0.0.1:8000"],
+    "cors_allow_credentials": true,
+    "cors_allow_methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    "cors_allow_headers": ["Authorization", "Content-Type", "Accept", "Origin", "User-Agent"],
+    "cors_expose_headers": ["Content-Length", "Content-Type"]
+  },
+  "logging": {
+    "level": "INFO",
+    "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    "date_format": "%Y-%m-%d %H:%M:%S",
+    "file": "logs/crewai.log",
+    "max_size": 10485760,
+    "backup_count": 5
+  },
+  "llm": {
+    "provider": "openai",
+    "model": "gpt-4",
+    "temperature": 0.7,
+    "max_tokens": 1500,
+    "top_p": 1.0,
+    "frequency_penalty": 0.0,
+    "presence_penalty": 0.0,
+    "timeout": 60
+  },
+  "agents": {
+    "max_iterations": 5,
+    "max_rpm": 10,
+    "cache_enabled": true,
+    "cache_expiry": 3600,
+    "default_tools": []
+  },
+  "workflow": {
+    "max_concurrent_tasks": 5,
+    "timeout": 300,
+    "retry_attempts": 3,
+    "retry_delay": 5,
+    "cache_enabled": true,
+    "cache_expiry": 86400
+  },
+  "database": {
+    "type": "sqlite",
+    "sqlite_path": "data/crewai.db",
+    "postgres_host": "localhost",
+    "postgres_port": 5432,
+    "postgres_user": "crewai",
+    "postgres_password": "",
+    "postgres_database": "crewai_workflow",
+    "pool_size": 10,
+    "max_overflow": 20,
+    "pool_timeout": 30,
+    "pool_recycle": 3600,
+    "auto_migrate": true,
+    "backup_before_migrate": true
+  },
+  "cache": {
+    "type": "redis",
+    "redis_url": "redis://localhost:6379/0",
+    "host": "localhost",
+    "port": 6379,
+    "db": 0,
+    "password": null,
+    "username": null,
+    "max_connections": 20,
+    "connection_timeout": 5,
+    "socket_timeout": 5,
+    "retry_on_timeout": true,
+    "default_ttl": 3600,
+    "key_prefix": "crewai:",
+    "health_check_interval": 30,
+    "max_retries": 3,
+    "retry_delay": 1,
+    "enable_fallback": true,
+    "fallback_type": "memory"
+  },
+  "faq": {
+    "embedding_model": "text-embedding-ada-002",
+    "similarity_threshold": 0.75,
+    "max_results": 5,
+    "knowledge_base_path": "knowledge_base"
+  },
+  "observability": {
+    "enabled": true,
+    "sentry_dsn": null,
+    "sentry_environment": "development",
+    "sentry_release": "1.0.0",
+    "sentry_sample_rate": 1.0,
+    "sentry_traces_sample_rate": 0.1,
+    "sentry_profiles_sample_rate": 0.1,
+    "otel_enabled": true,
+    "service_name": "crewai-workflow-platform",
+    "service_version": "1.0.0",
+    "trace_sample_rate": 1.0,
+    "exporter": "console",
+    "jaeger_endpoint": "http://localhost:14268/api/traces",
+    "otlp_endpoint": "http://localhost:4317",
+    "metrics_enabled": true,
+    "metrics_port": 8090,
+    "metrics_interval": 10,
+    "enable_performance_monitoring": true,
+    "slow_query_threshold": 1.0,
+    "memory_threshold": 0.8
+  },
+  "evaluation": {
+    "quality_threshold": 0.8,
+    "max_evaluation_tokens": 2000,
+    "evaluation_model": "gpt-4",
+    "criteria": [
+      "accuracy",
+      "completeness",
+      "relevance",
+      "coherence"
+    ]
+  },
+  "security": {
+    "api_key_required": true,
+    "api_key_header": "X-API-Key",
+    "jwt_secret": "CHANGE-THIS-IN-PRODUCTION-MINIMUM-32-CHARS",
+    "jwt_algorithm": "HS256",
+    "jwt_access_token_expire_minutes": 30,
+    "jwt_refresh_token_expire_days": 7,
+    "jwt_issuer": "crewai-workflow-platform",
+    "jwt_audience": "crewai-users",
+    "use_token_fingerprinting": true,
+    "password_min_length": 8,
+    "max_login_attempts": 5,
+    "lockout_duration": 900,
+    "demo_admin": {
+      "id": "admin_001",
+      "username": "admin",
+      "password": "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj38KUCjwJ4i",
+      "role": "admin",
+      "email": "admin@crewai-platform.com"
+    },
+    "demo_user": {
+      "id": "user_001",
+      "username": "demo",
+      "password": "$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW",
+      "role": "user",
+      "email": "demo@crewai-platform.com"
+    }
+  }
+}

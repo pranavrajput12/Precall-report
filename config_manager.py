@@ -48,6 +48,10 @@ class AgentConfig:
     allow_delegation: bool = False
     temperature: float = 0.3
     max_tokens: int = 2048
+    tools: Optional[List[str]] = None
+    capabilities: Optional[Dict[str, Any]] = None
+    performance_metrics: Optional[Dict[str, Any]] = None
+    model_config: Optional[Dict[str, Any]] = None
     created_at: str = None
     updated_at: str = None
     version: int = 1
@@ -137,8 +141,16 @@ class ConfigManager:
     """Centralized configuration management for CrewAI workflow system"""
 
     def __init__(self, config_dir: str = "config"):
-        self.config_dir = Path(config_dir)
+        # Use absolute path to ensure consistency
+        if not os.path.isabs(config_dir):
+            # Get the directory where this script is located
+            script_dir = Path(__file__).parent.absolute()
+            self.config_dir = script_dir / config_dir
+        else:
+            self.config_dir = Path(config_dir)
+            
         self.config_dir.mkdir(exist_ok=True)
+        logger.info(f"Config directory: {self.config_dir.absolute()}")
 
         # Create subdirectories
         (self.config_dir / "agents").mkdir(exist_ok=True)
@@ -148,73 +160,98 @@ class ConfigManager:
         (self.config_dir / "models").mkdir(exist_ok=True)
         (self.config_dir / "versions").mkdir(exist_ok=True)
 
-        # Initialize database
+        # Initialize database with absolute path
         self.db_path = self.config_dir / "config.db"
+        logger.info(f"Database path: {self.db_path.absolute()}")
         self._init_database()
 
         # Initialize with default configurations
         self._initialize_default_configs()
 
+    def _get_db_connection(self):
+        """Get a database connection with proper error handling"""
+        try:
+            conn = sqlite3.connect(str(self.db_path), timeout=30.0)
+            conn.row_factory = sqlite3.Row  # Enable dict-like access to rows
+            return conn
+        except sqlite3.Error as e:
+            logger.error(f"Database connection error: {e}")
+            raise
+    
     def _init_database(self):
         """Initialize SQLite database for version control and history"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
+        try:
+            conn = self._get_db_connection()
+            cursor = conn.cursor()
+            
+            # Enable WAL mode for better concurrency
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA synchronous=NORMAL")
+            cursor.execute("PRAGMA cache_size=10000")
+            cursor.execute("PRAGMA temp_store=memory")
 
-        # Create version history table
-        cursor.execute(
+            # Create version history table
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS version_history (
+                    id TEXT PRIMARY KEY,
+                    entity_type TEXT NOT NULL,
+                    entity_id TEXT NOT NULL,
+                    version INTEGER NOT NULL,
+                    content TEXT NOT NULL,
+                    content_hash TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    created_by TEXT DEFAULT 'system',
+                    change_description TEXT DEFAULT '',
+                    UNIQUE(entity_type, entity_id, version)
+                )
             """
-            CREATE TABLE IF NOT EXISTS version_history (
-                id TEXT PRIMARY KEY,
-                entity_type TEXT NOT NULL,
-                entity_id TEXT NOT NULL,
-                version INTEGER NOT NULL,
-                content TEXT NOT NULL,
-                content_hash TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                created_by TEXT DEFAULT 'system',
-                change_description TEXT DEFAULT '',
-                UNIQUE(entity_type, entity_id, version)
             )
-        """
-        )
 
-        # Create execution history table
-        cursor.execute(
+            # Create execution history table
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS execution_history (
+                    id TEXT PRIMARY KEY,
+                    workflow_id TEXT NOT NULL,
+                    agent_id TEXT,
+                    prompt_id TEXT,
+                    input_data TEXT,
+                    output_data TEXT,
+                    execution_time REAL,
+                    status TEXT,
+                    error_message TEXT,
+                    created_at TEXT NOT NULL
+                )
             """
-            CREATE TABLE IF NOT EXISTS execution_history (
-                id TEXT PRIMARY KEY,
-                workflow_id TEXT NOT NULL,
-                agent_id TEXT,
-                prompt_id TEXT,
-                input_data TEXT,
-                output_data TEXT,
-                execution_time REAL,
-                status TEXT,
-                error_message TEXT,
-                created_at TEXT NOT NULL
             )
-        """
-        )
 
-        # Create test results table
-        cursor.execute(
+            # Create test results table
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS test_results (
+                    id TEXT PRIMARY KEY,
+                    entity_type TEXT NOT NULL,
+                    entity_id TEXT NOT NULL,
+                    test_input TEXT,
+                    test_output TEXT,
+                    execution_time REAL,
+                    status TEXT,
+                    error_message TEXT,
+                    created_at TEXT NOT NULL
+                )
             """
-            CREATE TABLE IF NOT EXISTS test_results (
-                id TEXT PRIMARY KEY,
-                entity_type TEXT NOT NULL,
-                entity_id TEXT NOT NULL,
-                test_input TEXT,
-                test_output TEXT,
-                execution_time REAL,
-                status TEXT,
-                error_message TEXT,
-                created_at TEXT NOT NULL
             )
-        """
-        )
 
-        conn.commit()
-        conn.close()
+            conn.commit()
+            logger.info("Database initialized successfully")
+            
+        except sqlite3.Error as e:
+            logger.error(f"Database initialization error: {e}")
+            raise
+        finally:
+            if 'conn' in locals():
+                conn.close()
 
     def _generate_content_hash(self, content: str) -> str:
         """Generate SHA-256 hash of content"""
@@ -450,33 +487,134 @@ class ConfigManager:
         error_message: str = "",
     ):
         """Save execution history to database"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
+        try:
+            conn = self._get_db_connection()
+            cursor = conn.cursor()
 
-        execution_id = f"{workflow_id}_{agent_id}_{datetime.now().isoformat()}"
+            # Generate unique ID
+            execution_id = f"exec_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{hash(workflow_id + agent_id + prompt_id) % 10000}"
 
-        cursor.execute(
-            """
-            INSERT INTO execution_history
-            (id, workflow_id, agent_id, prompt_id, input_data, output_data, execution_time, status, error_message, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-            (
-                execution_id,
-                workflow_id,
-                agent_id,
-                prompt_id,
-                input_data,
-                output_data,
-                execution_time,
-                status,
-                error_message,
-                datetime.now().isoformat(),
-            ),
-        )
+            cursor.execute(
+                """
+                INSERT INTO execution_history (
+                    id, workflow_id, agent_id, prompt_id, input_data, output_data,
+                    execution_time, status, error_message, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+                (
+                    execution_id,
+                    workflow_id,
+                    agent_id,
+                    prompt_id,
+                    input_data,
+                    output_data,
+                    execution_time,
+                    status,
+                    error_message,
+                    datetime.now().isoformat(),
+                ),
+            )
 
-        conn.commit()
-        conn.close()
+            conn.commit()
+            logger.info(f"Saved execution history: {execution_id}")
+            return execution_id
+            
+        except sqlite3.Error as e:
+            logger.error(f"Error saving execution history: {e}")
+            raise
+        finally:
+            if 'conn' in locals():
+                conn.close()
+
+    def get_execution_history(self, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
+        """Get execution history from database
+
+        Args:
+            limit: Maximum number of records to return
+            offset: Number of records to skip
+
+        Returns:
+            List of execution history records
+        """
+        try:
+            conn = self._get_db_connection()
+            cursor = conn.cursor()
+
+            cursor.execute(
+                """
+                SELECT id, workflow_id, agent_id, prompt_id, input_data, output_data,
+                       execution_time, status, error_message, created_at
+                FROM execution_history
+                ORDER BY created_at DESC
+                LIMIT ? OFFSET ?
+            """,
+                (limit, offset),
+            )
+
+            results = []
+            for row in cursor.fetchall():
+                try:
+                    input_data_parsed = json.loads(row[4]) if row[4] else {}
+                except (json.JSONDecodeError, TypeError):
+                    input_data_parsed = {"raw": row[4]}
+
+                try:
+                    output_data_parsed = json.loads(row[5]) if row[5] else {}
+                except (json.JSONDecodeError, TypeError):
+                    output_data_parsed = {"raw": row[5]}
+
+                results.append(
+                    {
+                        "id": row[0],
+                        "workflow_id": row[1],
+                        "workflow_name": f"{row[1]} Workflow",  # For compatibility with frontend
+                        "agent_id": row[2],
+                        "prompt_id": row[3],
+                        "input_data": input_data_parsed,
+                        "output": output_data_parsed,  # For compatibility with frontend
+                        "execution_time": row[6],
+                        "status": row[7],
+                        "error_message": row[8],
+                        "created_at": row[9],
+                        "started_at": row[9],  # For compatibility with frontend
+                        "completed_at": row[9],  # Approximate, for compatibility
+                        "duration": row[6],  # For compatibility with frontend
+                        "progress": 100 if row[7] == "success" else 0,  # For compatibility
+                        "current_step": "Completed" if row[7] == "success" else "Failed",
+                        "steps": []  # For compatibility with frontend
+                    }
+                )
+
+            return results
+
+        except sqlite3.Error as e:
+            logger.error(f"Error getting execution history: {e}")
+            raise
+        finally:
+            if 'conn' in locals():
+                conn.close()
+        
+    def get_execution_history_count(self) -> int:
+        """Get total count of execution history records
+
+        Returns:
+            Total number of execution history records
+        """
+        try:
+            conn = self._get_db_connection()
+            cursor = conn.cursor()
+
+            cursor.execute("SELECT COUNT(*) FROM execution_history")
+            count = cursor.fetchone()[0]
+
+            return count
+
+        except sqlite3.Error as e:
+            logger.error(f"Error getting execution history count: {e}")
+            raise
+        finally:
+            if 'conn' in locals():
+                conn.close()
 
     def _config_exists(self) -> bool:
         """Check if configuration files exist"""

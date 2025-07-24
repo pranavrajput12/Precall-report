@@ -1,30 +1,57 @@
 import os
-from typing import Any, Dict, List
+from typing import Any, Dict, List, cast
 
 from crewai import Agent, Crew, Task
 from dotenv import load_dotenv
 from langchain_openai import AzureChatOpenAI
+from pydantic import SecretStr
+
+from config_system import config_system
 
 load_dotenv()
 
+# Get LLM configuration from config system
+llm_config = config_system.get("llm")
+
+# Azure OpenAI credentials - still using env vars for sensitive credentials
+# but with config system fallbacks
 AZURE_OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY")
 AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT")
-AZURE_OPENAI_DEPLOYMENT = os.getenv("AZURE_OPENAI_DEPLOYMENT")
-AZURE_OPENAI_API_VERSION = os.getenv("AZURE_OPENAI_API_VERSION")
+AZURE_OPENAI_DEPLOYMENT = os.getenv("AZURE_OPENAI_DEPLOYMENT",
+                                   config_system.get("llm.azure_deployment"))
+AZURE_OPENAI_API_VERSION = os.getenv("AZURE_OPENAI_API_VERSION",
+                                    config_system.get("llm.azure_api_version"))
 
-# Enhanced LLM configuration with streaming support
+# Enhanced LLM configuration with streaming support and explicit Azure credentials
+# Note: Disable streaming for CrewAI compatibility
+# Set environment variables for litellm
+# IMPORTANT: Set these as environment variables, not in code!
+# export AZURE_API_KEY="your-api-key"
+# export AZURE_API_BASE="https://your-endpoint.openai.azure.com"
+# export AZURE_API_VERSION="2025-01-01-preview"
+
+# Get Azure credentials from environment variables
+azure_api_key = os.environ.get('AZURE_API_KEY')
+if not azure_api_key:
+    raise ValueError("AZURE_API_KEY environment variable is required")
+
+azure_endpoint = os.environ.get('AZURE_API_BASE', 'https://airops.openai.azure.com')
+azure_api_version = os.environ.get('AZURE_API_VERSION', '2025-01-01-preview')
+
 llm = AzureChatOpenAI(
-    openai_api_key=AZURE_OPENAI_API_KEY,
-    azure_endpoint=AZURE_OPENAI_ENDPOINT,
-    deployment_name=AZURE_OPENAI_DEPLOYMENT,
-    openai_api_version=AZURE_OPENAI_API_VERSION,
-    temperature=0.3,
-    max_tokens=2048,
-    streaming=True,  # Enable streaming for real-time responses
+    api_key=SecretStr(azure_api_key),
+    azure_endpoint=azure_endpoint,
+    azure_deployment="gpt-4.1",
+    api_version="2025-01-01-preview",
+    temperature=llm_config.get("temperature", 0.7),
+    max_tokens=llm_config.get("max_tokens", 1500),
+    streaming=False,  # Disable streaming for CrewAI compatibility
+    model="azure/gpt-4.1",  # Specify model name for litellm routing
     model_kwargs={
-        "top_p": 0.9,
-        "frequency_penalty": 0.1,
-        "presence_penalty": 0.1},
+        "top_p": llm_config.get("top_p", 1.0),
+        "frequency_penalty": llm_config.get("frequency_penalty", 0.0),
+        "presence_penalty": llm_config.get("presence_penalty", 0.0)
+    },
 )
 
 # Enhanced agents with improved configurations
@@ -41,7 +68,6 @@ profile_enrichment_agent = Agent(
     You excel at synthesizing complex information into clear, actionable insights that help sales teams connect with prospects effectively.""",
     llm=llm,
     verbose=True,
-    memory=True,
     max_iter=3,
     allow_delegation=False,
     step_callback=None,  # Can be used for streaming updates
@@ -60,7 +86,6 @@ linkedin_thread_analyzer = Agent(
     You can quickly identify buying signals, objections, and engagement opportunities in LinkedIn conversations.""",
     llm=llm,
     verbose=True,
-    memory=True,
     max_iter=2,
     allow_delegation=False,
 )
@@ -78,7 +103,6 @@ email_thread_analyzer = Agent(
     You excel at parsing complex email threads and extracting actionable insights for sales teams.""",
     llm=llm,
     verbose=True,
-    memory=True,
     max_iter=2,
     allow_delegation=False,
 )
@@ -96,7 +120,6 @@ faq_answer_agent = Agent(
     You provide accurate, helpful answers while maintaining a professional and supportive tone.""",
     llm=llm,
     verbose=True,
-    memory=True,
     max_iter=2,
     allow_delegation=False,
 )
@@ -115,7 +138,6 @@ linkedin_reply_agent = Agent(
     You craft messages that feel personal, valuable, and action-oriented while maintaining professional standards.""",
     llm=llm,
     verbose=True,
-    memory=True,
     max_iter=3,
     allow_delegation=False,
 )
@@ -134,7 +156,6 @@ email_reply_agent = Agent(
     You create email sequences that drive engagement while respecting recipient preferences and maintaining professional standards.""",
     llm=llm,
     verbose=True,
-    memory=True,
     max_iter=3,
     allow_delegation=False,
 )
@@ -152,7 +173,6 @@ escalation_agent = Agent(
     You ensure high-quality outputs by identifying when human intervention is needed and providing clear escalation guidance.""",
     llm=llm,
     verbose=True,
-    memory=True,
     max_iter=1,
     allow_delegation=False,
 )
@@ -162,24 +182,25 @@ def create_enhanced_crew(agents: List[Agent], tasks: List[Task]) -> Crew:
     """
     Create an enhanced crew with improved configuration for CrewAI v0.141.0
     """
+    # Get workflow configuration from config system
+    workflow_config = config_system.get("workflow")
+    
     return Crew(
-        agents=agents,
+        agents=cast(List[Any], agents),  # Type cast to avoid type error
         tasks=tasks,
         verbose=True,
-        memory=True,
-        process="sequential",  # Can be "sequential" or "hierarchical"
-        max_rpm=30,  # Rate limiting
-        language="en",
+        process="sequential",  # Can be "sequential" or "hierarchical"  # type: ignore
+        max_rpm=config_system.get("agents.max_rpm", 10),  # Rate limiting
         step_callback=None,  # Can be used for streaming updates
         task_callback=None,  # Can be used for task completion updates
         share_crew=False,
-        full_output=True,
         embedder={
             "provider": "azure_openai",
             "config": {
-                "model": "text-embedding-ada-002",
+                "model": config_system.get("faq.embedding_model", "text-embedding-ada-002"),
                 "deployment_name": os.getenv(
-                    "AZURE_OPENAI_EMBEDDING_DEPLOYMENT", "text-embedding-ada-002"
+                    "AZURE_OPENAI_EMBEDDING_DEPLOYMENT",
+                    config_system.get("llm.azure_embedding_deployment", "text-embedding-ada-002")
                 ),
             },
         },
@@ -283,25 +304,28 @@ def create_reply_generation_task(
     )
 
 
+# Tool configurations from config system
+tools_config = config_system.get("tools", {})
+
 # Tool configurations for enhanced functionality
 AVAILABLE_TOOLS = {
     "web_search": {
-        "enabled": True,
-        "provider": "serp_api",
+        "enabled": tools_config.get("web_search.enabled", True),
+        "provider": tools_config.get("web_search.provider", "serp_api"),
         "config": {
             "api_key": os.getenv("SERP_API_KEY", ""),
-            "engine": "google",
-            "num_results": 10,
+            "engine": tools_config.get("web_search.engine", "google"),
+            "num_results": tools_config.get("web_search.num_results", 10),
         },
     },
     "linkedin_scraper": {
-        "enabled": False,  # Requires additional setup
-        "provider": "custom",
-        "config": {},
+        "enabled": tools_config.get("linkedin_scraper.enabled", False),  # Requires additional setup
+        "provider": tools_config.get("linkedin_scraper.provider", "custom"),
+        "config": tools_config.get("linkedin_scraper.config", {}),
     },
     "company_enrichment": {
-        "enabled": False,  # Requires additional setup
-        "provider": "clearbit",
+        "enabled": tools_config.get("company_enrichment.enabled", False),  # Requires additional setup
+        "provider": tools_config.get("company_enrichment.provider", "clearbit"),
         "config": {"api_key": os.getenv("CLEARBIT_API_KEY", "")},
     },
 }

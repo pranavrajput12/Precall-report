@@ -28,6 +28,7 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
 # Local imports
+from logging_config import log_info, log_error, log_warning, log_debug
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +44,22 @@ class ObservabilityManager:
         self.is_initialized = False
 
     def initialize(self):
-        """Initialize all observability components"""
+        """
+        Initialize all observability components.
+        
+        This method sets up the complete observability stack including:
+        - OpenTelemetry for distributed tracing and metrics
+        - Langtrace for LLM-specific tracing
+        - Custom metrics for application-specific monitoring
+        - Framework instrumentation for automatic tracing
+        
+        If the system is already initialized, this method returns early.
+        Any exceptions during initialization are caught and logged, allowing
+        the application to continue running even if observability setup fails.
+        
+        Returns:
+            None
+        """
         if self.is_initialized:
             return
 
@@ -61,13 +77,28 @@ class ObservabilityManager:
             self._instrument_frameworks()
 
             self.is_initialized = True
-            logger.info("Observability system initialized successfully")
+            log_info(logger, "Observability system initialized successfully")
 
         except Exception as e:
-            logger.error(f"Failed to initialize observability: {e}")
+            log_error(logger, "Failed to initialize observability", e)
 
     def _setup_opentelemetry(self):
-        """Setup OpenTelemetry tracing and metrics"""
+        """
+        Setup OpenTelemetry tracing and metrics.
+        
+        Configures the OpenTelemetry tracing and metrics subsystems:
+        - Creates a TracerProvider for distributed tracing
+        - Sets up OTLP exporters for sending telemetry data
+        - Configures batch processors for efficient telemetry export
+        - Registers the tracer provider globally
+        
+        The configuration uses environment variables for customization:
+        - OTEL_EXPORTER_OTLP_ENDPOINT: The endpoint for the OTLP exporter
+        - OTEL_EXPORTER_OTLP_HEADERS: Headers for the OTLP exporter
+        
+        Returns:
+            None
+        """
         # Configure trace provider
         trace.set_tracer_provider(TracerProvider())
 
@@ -169,10 +200,10 @@ class ObservabilityManager:
             # Instrument Redis
             RedisInstrumentor().instrument()
 
-            logger.info("Framework instrumentation completed")
+            log_info(logger, "Framework instrumentation completed")
 
         except Exception as e:
-            logger.warning(f"Framework instrumentation failed: {e}")
+            log_warning(logger, f"Framework instrumentation failed: {e}")
 
     def _get_otlp_headers(self) -> Dict[str, str]:
         """Get OTLP headers from environment"""
@@ -376,9 +407,9 @@ class ObservabilityManager:
 
         try:
             FastAPIInstrumentor.instrument_app(app)
-            logger.info("FastAPI instrumentation completed")
+            log_info(logger, "FastAPI instrumentation completed")
         except Exception as e:
-            logger.warning(f"FastAPI instrumentation failed: {e}")
+            log_warning(logger, f"FastAPI instrumentation failed: {e}")
 
 
 # Global observability manager instance

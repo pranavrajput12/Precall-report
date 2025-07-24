@@ -1,0 +1,14 @@
+{
+  "workflow_id": "default_workflow",
+  "input_data": {
+    "channel": "LinkedIn",
+    "conversation_thread": "Rhea Bijlani 00:45 Hi Ivy, impressed by your launch of Bridal.Global and your drive to support bridal vendors. Would love to connect on fundraising challenges. Delivered Avatar Avatar Ivy Yu 00:51 Hi Rhea,\n\nThank you so much for your kind message and for reaching out. I'm grateful that Bridal.Global resonated with you—it's been a long journey, and the mission to uplift authentic bridal vendors is truly close to my heart.\n\nI'd be happy to share more about our fundraising experience and challenges so far, and I'd also love to hear what kind of companies or sectors you're currently exploring as a Research Analyst at Qubit. Looking forward to connecting and exchanging insights!",
+    "client_linkedin": "https://www.linkedin.com/in/ivysf/",
+    "company_website": "http://bridal.global/",
+    "company_linkedin": "https://www.linkedin.com/company/bridal-global/",
+    "personalization_data": {
+      "explicit_questions": ["fundraising challenges", "companies or sectors exploring"],
+      "implicit_needs": ["funding support", "investor connections", "strategic advice"]
+    }
+  }
+}

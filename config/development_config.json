@@ -1,0 +1,33 @@
+{
+  "app": {
+    "debug": true,
+    "host": "localhost",
+    "cors_origins": ["http://localhost:3000", "http://localhost:8100", "http://localhost:8080", "http://127.0.0.1:3000", "http://127.0.0.1:8100"],
+    "cors_allow_credentials": true
+  },
+  "logging": {
+    "level": "DEBUG"
+  },
+  "llm": {
+    "temperature": 0.8,
+    "max_tokens": 2000
+  },
+  "agents": {
+    "cache_enabled": true
+  },
+  "workflow": {
+    "max_concurrent_tasks": 2,
+    "cache_enabled": true
+  },
+  "cache": {
+    "type": "memory",
+    "expiry": 7200
+  },
+  "observability": {
+    "trace_sample_rate": 1.0,
+    "exporter": "console"
+  },
+  "security": {
+    "api_key_required": false
+  }
+}

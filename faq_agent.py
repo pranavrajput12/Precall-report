@@ -11,6 +11,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 from faq import faq_manager, get_faq_answer
 from agents import llm  # Use the existing LLM configuration
+from logging_config import log_info, log_error, log_warning, log_debug
 
 logger = logging.getLogger(__name__)
 
@@ -51,14 +52,28 @@ class FAQAgent:
                 self.faq_data.append(faq)
             
             self.faq_embeddings = np.array(self.faq_embeddings) if self.faq_embeddings else np.array([])
-            logger.info(f"Loaded {len(self.faq_data)} FAQ embeddings")
+            log_info(logger, f"Loaded {len(self.faq_data)} FAQ embeddings")
         except Exception as e:
-            logger.error(f"Error loading FAQ embeddings: {e}")
+            log_error(logger, "Error loading FAQ embeddings", e)
             self.faq_embeddings = np.array([])
             self.faq_data = []
     
     def semantic_search(self, query: str, top_k: int = 5) -> List[Dict]:
-        """Perform semantic search to find most relevant FAQ entries"""
+        """
+        Perform semantic search to find most relevant FAQ entries.
+        
+        This method uses a sentence transformer model to encode the query into
+        a vector embedding, then calculates cosine similarity with pre-computed
+        FAQ embeddings to find the most semantically similar entries.
+        
+        Args:
+            query (str): The search query or question to find relevant FAQs for
+            top_k (int, optional): Maximum number of results to return. Defaults to 5.
+            
+        Returns:
+            List[Dict]: List of relevant FAQ entries with similarity scores,
+                        sorted by relevance (highest similarity first)
+        """
         if len(self.faq_embeddings) == 0:
             return []
         
@@ -81,11 +96,30 @@ class FAQAgent:
             
             return results
         except Exception as e:
-            logger.error(f"Error in semantic search: {e}")
+            log_error(logger, "Error in semantic search", e)
             return []
     
     def analyze_question(self, question: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
-        """Analyze a question to understand intent and extract key information"""
+        """
+        Analyze a question to understand intent and extract key information.
+        
+        This method uses the LLM to analyze a question and extract structured
+        information about its intent, type, and key entities. The analysis helps
+        in providing more accurate and contextually relevant answers.
+        
+        Args:
+            question (str): The question to analyze
+            context (Dict[str, Any], optional): Additional context that might help
+                                               with question analysis. Defaults to None.
+            
+        Returns:
+            Dict[str, Any]: Structured analysis of the question including:
+                            - question_type: The type of question (factual, comparison, etc.)
+                            - intent: The underlying intent of the question
+                            - key_entities: Important entities mentioned in the question
+                            - implied_needs: Needs implied by the question
+                            - suggested_faq_categories: Relevant FAQ categories
+        """
         
         analysis_prompt = f"""
         Analyze this question from a prospect and extract key information:
@@ -111,7 +145,7 @@ class FAQAgent:
             analysis = json.loads(result.content)
             return analysis
         except Exception as e:
-            logger.error(f"Error analyzing question: {e}")
+            log_error(logger, "Error analyzing question", e)
             return {
                 "question_type": "unknown",
                 "main_intent": question,
@@ -226,7 +260,7 @@ class FAQAgent:
             }
             
         except Exception as e:
-            logger.error(f"Error generating intelligent answer: {e}")
+            log_error(logger, "Error generating intelligent answer", e)
             # Fallback to simple FAQ lookup
             if all_relevant:
                 # Use the best matching FAQ entry
@@ -281,7 +315,7 @@ class FAQAgent:
             suggestions = json.loads(result.content)
             return suggestions
         except Exception as e:
-            logger.error(f"Error suggesting new FAQs: {e}")
+            log_error(logger, "Error suggesting new FAQs", e)
             return []
     
     def evaluate_answer_quality(self, question: str, answer: str, feedback: Optional[str] = None) -> Dict[str, Any]:
@@ -325,7 +359,7 @@ class FAQAgent:
             evaluation = json.loads(result.content)
             return evaluation
         except Exception as e:
-            logger.error(f"Error evaluating answer quality: {e}")
+            log_error(logger, "Error evaluating answer quality", e)
             return {
                 "overall_score": 70,
                 "error": str(e)

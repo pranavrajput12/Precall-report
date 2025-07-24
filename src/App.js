@@ -19,7 +19,6 @@ import WorkflowBuilder from './components/WorkflowBuilder';
 import ToolManager from './components/ToolManager';
 import Settings from './components/Settings';
 import Sidebar from './components/Sidebar';
-import ExecutionHistory from './components/ExecutionHistory';
 import KnowledgeBase from './components/KnowledgeBase';
 import RunWorkflow from './pages/RunWorkflow';
 import AllRuns from './pages/AllRuns';
@@ -157,7 +156,6 @@ function App() {
                       <Route path="/evals" element={<EvaluationDashboard />} />
                       <Route path="/tools" element={<ToolManager />} />
                       <Route path="/settings" element={<Settings />} />
-                      <Route path="/history" element={<ExecutionHistory />} />
                       <Route path="/all-runs" element={<AllRuns />} />
                       <Route path="/knowledge-base" element={<KnowledgeBase />} />
                       {/* Add more routes as needed */}
