@@ -8,7 +8,10 @@ const RunWorkflow = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [executionStatus, setExecutionStatus] = useState('');
   const [result, setResult] = useState(null);
+  const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
+  const [duplicateExecution, setDuplicateExecution] = useState(null);
   const [inputs, setInputs] = useState({
     conversation_thread: '',
     channel: 'linkedin',
@@ -18,10 +21,51 @@ const RunWorkflow = () => {
     qubit_context: ''
   });
 
+  // Function to check for recent duplicate executions
+  const checkForDuplicates = async (trimmedInputs) => {
+    try {
+      const response = await fetch('/api/execution-history?page=1&page_size=10');
+      if (!response.ok) return null;
+      
+      const data = await response.json();
+      const recentExecutions = data.items || [];
+      
+      // Look for executions in the last 5 minutes with matching inputs
+      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+      
+      for (const execution of recentExecutions) {
+        if (!execution.created_at) continue;
+        
+        const executionTime = new Date(execution.created_at);
+        if (executionTime < fiveMinutesAgo) continue;
+        
+        // Check if inputs match (excluding qubit_context which can vary)
+        const executionInputs = execution.input_data || {};
+        const inputsMatch = (
+          executionInputs.conversation_thread?.trim() === trimmedInputs.conversation_thread &&
+          executionInputs.channel === trimmedInputs.channel &&
+          executionInputs.prospect_profile_url?.trim() === trimmedInputs.prospect_profile_url &&
+          executionInputs.prospect_company_url?.trim() === trimmedInputs.prospect_company_url &&
+          executionInputs.prospect_company_website?.trim() === trimmedInputs.prospect_company_website
+        );
+        
+        if (inputsMatch) {
+          return execution;
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error checking for duplicates:', error);
+      return null;
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setResult(null);
+    setExecutionStatus('Preparing workflow...');
 
     try {
       // Trim all input values to remove trailing/leading spaces
@@ -30,6 +74,18 @@ const RunWorkflow = () => {
         return acc;
       }, {});
       
+      // Check for recent duplicate executions
+      setExecutionStatus('Checking for duplicates...');
+      const duplicateExec = await checkForDuplicates(trimmedInputs);
+      if (duplicateExec) {
+        setDuplicateExecution(duplicateExec);
+        setShowDuplicateDialog(true);
+        setLoading(false);
+        setExecutionStatus('');
+        return;
+      }
+      
+      setExecutionStatus('Starting workflow execution...');
       console.log('Submitting inputs:', trimmedInputs);
       const response = await fetch('/run', {
         method: 'POST',
@@ -38,6 +94,8 @@ const RunWorkflow = () => {
         },
         body: JSON.stringify(trimmedInputs),
       });
+
+      setExecutionStatus('Processing workflow response...');
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -56,18 +114,28 @@ const RunWorkflow = () => {
       }
 
       const data = await response.json();
+      setExecutionStatus('Workflow completed successfully!');
       setResult(data);
       
       // Invalidate React Query caches to refresh data across pages
+      setExecutionStatus('Updating data caches...');
       queryClient.invalidateQueries({ queryKey: ['all-runs'] });
       queryClient.invalidateQueries({ queryKey: ['performance-metrics'] });
       queryClient.invalidateQueries({ queryKey: ['agent-performance'] });
       queryClient.invalidateQueries({ queryKey: ['system-performance'] });
       
       toast.success('Workflow completed successfully!');
+      setExecutionStatus('Redirecting to All Runs...');
+      
+      // Auto-redirect to All Runs page after 2 seconds
+      setTimeout(() => {
+        navigate('/all-runs');
+      }, 2000);
+      
     } catch (error) {
       toast.error(error.message);
       console.error('Error:', error);
+      setExecutionStatus('');
     } finally {
       setLoading(false);
     }
@@ -95,6 +163,78 @@ const RunWorkflow = () => {
       ...sampleData
     });
     toast.success('Sample data filled!');
+  };
+
+  // Function to proceed with duplicate execution
+  const proceedWithDuplicate = async () => {
+    setShowDuplicateDialog(false);
+    setDuplicateExecution(null);
+    
+    try {
+      // Trim all input values to remove trailing/leading spaces
+      const trimmedInputs = Object.keys(inputs).reduce((acc, key) => {
+        acc[key] = typeof inputs[key] === 'string' ? inputs[key].trim() : inputs[key];
+        return acc;
+      }, {});
+      
+      console.log('Proceeding with duplicate inputs:', trimmedInputs);
+      const response = await fetch('/run', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(trimmedInputs),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('API Error:', errorData);
+        
+        // Handle validation errors
+        if (response.status === 422 && errorData.detail && Array.isArray(errorData.detail)) {
+          const errors = errorData.detail.map(err => {
+            const field = err.loc[err.loc.length - 1];
+            return `${field}: ${err.msg}`;
+          }).join('\n');
+          throw new Error(`Validation failed:\n${errors}`);
+        }
+        
+        throw new Error(errorData.detail || 'Failed to run workflow');
+      }
+
+      const data = await response.json();
+      setExecutionStatus('Workflow completed successfully!');
+      setResult(data);
+      
+      // Invalidate React Query caches to refresh data across pages
+      setExecutionStatus('Updating data caches...');
+      queryClient.invalidateQueries({ queryKey: ['all-runs'] });
+      queryClient.invalidateQueries({ queryKey: ['performance-metrics'] });
+      queryClient.invalidateQueries({ queryKey: ['agent-performance'] });
+      queryClient.invalidateQueries({ queryKey: ['system-performance'] });
+      
+      toast.success('Workflow completed successfully!');
+      setExecutionStatus('Redirecting to All Runs...');
+      
+      // Auto-redirect to All Runs page after 2 seconds
+      setTimeout(() => {
+        navigate('/all-runs');
+      }, 2000);
+      
+    } catch (error) {
+      toast.error(error.message);
+      console.error('Error:', error);
+      setExecutionStatus('');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Function to view existing duplicate execution
+  const viewDuplicateExecution = () => {
+    setShowDuplicateDialog(false);
+    setDuplicateExecution(null);
+    navigate('/all-runs');
   };
 
   return (
@@ -239,6 +379,16 @@ const RunWorkflow = () => {
                 </>
               )}
             </button>
+
+            {/* Execution Status Display */}
+            {loading && executionStatus && (
+              <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                <div className="flex items-center gap-2">
+                  <Loader className="w-4 h-4 animate-spin text-blue-600" />
+                  <p className="text-sm text-blue-700 font-medium">{executionStatus}</p>
+                </div>
+              </div>
+            )}
           </form>
         </div>
 
@@ -250,12 +400,14 @@ const RunWorkflow = () => {
               <h2 className="text-lg font-semibold text-gray-900">Workflow Results</h2>
             </div>
 
-            {/* Processing Time */}
-            <div className="mb-4 p-3 bg-gray-50 rounded-md">
-              <p className="text-sm text-gray-600">
-                Processing Time: <span className="font-medium">{result.processing_time || 'N/A'}</span>
-              </p>
-            </div>
+            {/* Processing Time - only show if we have meaningful data */}
+            {result.processing_time && result.processing_time !== 'N/A' && (
+              <div className="mb-4 p-3 bg-gray-50 rounded-md">
+                <p className="text-sm text-gray-600">
+                  Processing Time: <span className="font-medium">{result.processing_time}</span>
+                </p>
+              </div>
+            )}
 
             {/* Generated Reply */}
             {result.reply && (
@@ -342,6 +494,64 @@ const RunWorkflow = () => {
             </div>
           </div>
         </div>
+
+        {/* Duplicate Detection Dialog */}
+        {showDuplicateDialog && duplicateExecution && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full">
+              <div className="flex items-center gap-3 mb-4">
+                <AlertCircle className="w-6 h-6 text-amber-500" />
+                <h3 className="text-lg font-semibold text-gray-900">Duplicate Workflow Detected</h3>
+              </div>
+              
+              <p className="text-gray-600 mb-4">
+                A workflow with identical inputs was already executed recently:
+              </p>
+              
+              <div className="bg-gray-50 p-3 rounded-md mb-4">
+                <p className="text-sm text-gray-700">
+                  <span className="font-medium">Execution ID:</span> {duplicateExecution.id}
+                </p>
+                <p className="text-sm text-gray-700">
+                  <span className="font-medium">Status:</span> {duplicateExecution.status}
+                </p>
+                <p className="text-sm text-gray-700">
+                  <span className="font-medium">Created:</span> {new Date(duplicateExecution.created_at).toLocaleString()}
+                </p>
+              </div>
+              
+              <p className="text-gray-600 mb-6">
+                Would you like to view the existing results or run the workflow again?
+              </p>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={viewDuplicateExecution}
+                  className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 flex items-center justify-center gap-2"
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  View Existing
+                </button>
+                <button
+                  onClick={proceedWithDuplicate}
+                  className="flex-1 bg-gray-600 text-white py-2 px-4 rounded-md hover:bg-gray-700"
+                >
+                  Run Again
+                </button>
+                <button
+                  onClick={() => {
+                    setShowDuplicateDialog(false);
+                    setDuplicateExecution(null);
+                    setLoading(false);
+                  }}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

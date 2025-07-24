@@ -27,7 +27,12 @@ A powerful, production-ready workflow orchestration platform built with CrewAI, 
 - **Spreadsheet FAQ Editor**: Edit knowledge base directly in the browser
 - **Real-time Updates**: WebSocket support for live status updates
 - **Performance Metrics**: Dynamic quality scoring and response rate predictions
-- **Run Workflow Page**: Easy-to-use interface for testing workflows
+- **Enhanced Run Workflow Page**: 
+  - Smart duplicate detection prevents accidental re-runs
+  - Real-time execution status tracking
+  - Auto-redirect to results after completion
+  - Clean UI without confusing elements
+  - Improved React Flow workflow visualization
 
 ### Agent Capabilities
 - **LinkedIn Outreach**: Profile analysis and personalized messaging (80-100 words) with quality scoring

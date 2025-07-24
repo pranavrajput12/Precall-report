@@ -32,17 +32,38 @@
 - **Solution**: Full integration with database saves and metric collection
 - **Files Modified**: workflow_executor.py, app.py
 
+## ✅ RECENT RESOLUTIONS (v2.1)
+
+### 6. Frontend UX Issues
+- **Issue**: Multiple workflow executions, confusing UI elements, React Flow errors
+- **Status**: ✅ RESOLVED
+- **Solution**: Implemented smart duplicate detection, auto-redirect, status tracking, clean UI
+- **Files Modified**: src/pages/RunWorkflow.js, src/components/WorkflowVisualization.js
+
+### 7. Duplicate Workflow Prevention
+- **Issue**: Users accidentally running same workflow multiple times
+- **Status**: ✅ RESOLVED
+- **Solution**: Smart duplicate detection with 5-minute window and confirmation dialog
+- **Files Modified**: src/pages/RunWorkflow.js
+
+### 8. User Flow Confusion
+- **Issue**: No clear next steps after workflow completion
+- **Status**: ✅ RESOLVED
+- **Solution**: Auto-redirect to All Runs page 2 seconds after completion
+- **Files Modified**: src/pages/RunWorkflow.js
+
+### 9. React Flow Console Errors
+- **Issue**: Edge creation errors and infinite re-render warnings
+- **Status**: ✅ RESOLVED
+- **Solution**: Fixed useCallback dependencies and edge validation logic
+- **Files Modified**: src/components/WorkflowVisualization.js
+
 ## ⚠️ PENDING VERIFICATION
 
-### 1. Frontend Output Display Testing
-- **Status**: ⚠️ NEEDS TESTING
-- **Description**: Frontend fixes applied but not yet tested with running backend
-- **Next Steps**: Start frontend server and verify output display works
-
-### 2. End-to-End Workflow Testing
-- **Status**: ⚠️ NEEDS TESTING  
-- **Description**: Need to test complete workflow through UI
-- **Next Steps**: Test LinkedIn and Email workflows via frontend
+### 1. Frontend UX Testing
+- **Status**: ⚠️ CURRENTLY BEING TESTED
+- **Description**: User is testing the new duplicate detection and auto-redirect features
+- **Next Steps**: Await user feedback on frontend improvements
 
 ## 📋 REMAINING TASKS
 

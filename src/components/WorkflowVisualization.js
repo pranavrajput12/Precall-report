@@ -22,37 +22,42 @@ const WorkflowVisualization = ({ agents = [], onNodeClick, onNodeDoubleClick }) 
     const startX = 100;
     const startY = 100;
     
-    return agents.map((agent, index) => ({
-      id: agent.id || `agent-${index}`,
-      type: 'default',
-      position: { 
-        x: startX + (index % 3) * nodeSpacing, 
-        y: startY + Math.floor(index / 3) * nodeSpacing 
-      },
-      data: { 
-        label: (
-          <div className="agent-node">
-            <div className="agent-title">{agent.name || 'Unnamed Agent'}</div>
-            <div className="agent-role">{agent.role || 'No role defined'}</div>
-            <div className="agent-status">
-              <span className={`status-indicator ${agent.status || 'ready'}`}></span>
-              {agent.status || 'Ready'}
+    return agents.map((agent, index) => {
+      // Ensure unique and valid node ID
+      const nodeId = agent.id || `agent-${index}`;
+      
+      return {
+        id: nodeId,
+        type: 'default',
+        position: { 
+          x: startX + (index % 3) * nodeSpacing, 
+          y: startY + Math.floor(index / 3) * nodeSpacing 
+        },
+        data: { 
+          label: (
+            <div className="agent-node">
+              <div className="agent-title">{agent.name || 'Unnamed Agent'}</div>
+              <div className="agent-role">{agent.role || 'No role defined'}</div>
+              <div className="agent-status">
+                <span className={`status-indicator ${agent.status || 'ready'}`}></span>
+                {agent.status || 'Ready'}
+              </div>
             </div>
-          </div>
-        ),
-        agent: agent
-      },
-      sourcePosition: Position.Right,
-      targetPosition: Position.Left,
-      style: {
-        background: '#ffffff',
-        border: '2px solid #e2e8f0',
-        borderRadius: '8px',
-        padding: '10px',
-        minWidth: '180px',
-        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-      },
-    }));
+          ),
+          agent: agent
+        },
+        sourcePosition: Position.Right,
+        targetPosition: Position.Left,
+        style: {
+          background: '#ffffff',
+          border: '2px solid #e2e8f0',
+          borderRadius: '8px',
+          padding: '10px',
+          minWidth: '180px',
+          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+        },
+      };
+    });
   }, [agents]);
 
   // Create edges based on agent dependencies
@@ -66,8 +71,11 @@ const WorkflowVisualization = ({ agents = [], onNodeClick, onNodeDoubleClick }) 
         const sourceId = agents[index - 1].id || `agent-${index - 1}`;
         const targetId = agent.id || `agent-${index}`;
         
+        // Ensure edge has unique ID and proper configuration
+        const edgeId = `${sourceId}-to-${targetId}`;
+        
         edges.push({
-          id: `${sourceId}-${targetId}`,
+          id: edgeId,
           source: sourceId,
           target: targetId,
           type: 'smoothstep',
@@ -91,7 +99,42 @@ const WorkflowVisualization = ({ agents = [], onNodeClick, onNodeDoubleClick }) 
 
   const onConnect = useCallback(
     (params) => {
-      setEdges((eds) => addEdge(params, eds));
+      // Validate connection parameters to prevent React Flow errors
+      if (!params.source || !params.target) {
+        console.warn('Invalid connection parameters:', params);
+        toast.error('Invalid connection - missing source or target');
+        return;
+      }
+      
+      // Create edge with proper configuration and check for duplicates in the setter
+      const newEdge = {
+        ...params,
+        id: `${params.source}-to-${params.target}-${Date.now()}`, // Add timestamp to ensure uniqueness
+        type: 'smoothstep',
+        animated: true,
+        style: {
+          stroke: '#3b82f6',
+          strokeWidth: 2,
+        },
+        markerEnd: {
+          type: 'arrowclosed',
+          color: '#3b82f6',
+        },
+      };
+      
+      setEdges((currentEdges) => {
+        // Check if this connection already exists
+        const connectionExists = currentEdges.some(edge => 
+          edge.source === params.source && edge.target === params.target
+        );
+        
+        if (connectionExists) {
+          toast.warn('Connection already exists');
+          return currentEdges; // Return unchanged edges
+        }
+        
+        return addEdge(newEdge, currentEdges);
+      });
       toast.success('Connected agents in workflow');
     },
     [setEdges]
