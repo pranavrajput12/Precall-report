@@ -49,7 +49,33 @@ from validation import (
     validate_thread_analysis, validate_reply_generation,
     validate_request_data
 )
+from input_validator import validate_workflow_inputs
+from context_enricher import enrich_workflow_context
 from pagination import pagination_params, Paginator
+from agent_performance import (
+    track_agent_execution, 
+    get_agent_performance_metrics, 
+    get_performance_summary,
+    select_best_model
+)
+from batch_processor import (
+    create_batch,
+    start_batch,
+    get_batch_status,
+    get_batch_results,
+    list_batches,
+    cancel_batch
+)
+from feedback_system import (
+    submit_feedback,
+    get_feedback_for_execution,
+    get_feedback_summary,
+    update_feedback_status,
+    get_pending_feedback,
+    FeedbackType,
+    FeedbackSource,
+    FeedbackStatus
+)
 
 # Add this near the top of the file, after the imports
 import json
@@ -565,7 +591,58 @@ async def get_evaluation_summary():
     Raises:
         ExternalServiceError: If an error occurs while retrieving the summary
     """
-    return evaluation_system.get_evaluation_summary()
+    # Get evaluation summary from evaluation system
+    eval_summary = evaluation_system.get_evaluation_summary()
+    
+    # If no in-memory evaluations, get recent execution history with evaluations
+    if not eval_summary or eval_summary.get("message") == "No evaluation results available":
+        try:
+            # Get recent executions from execution manager
+            recent_executions = execution_manager.get_all_executions(limit=50)
+            
+            # Extract evaluation data from executions
+            evaluation_results = []
+            for execution in recent_executions:
+                if execution.get('output_data'):
+                    output_data = execution['output_data']
+                    if isinstance(output_data, dict) and output_data.get('quality_score'):
+                        evaluation_results.append({
+                            'workflow_id': execution.get('workflow_id'),
+                            'execution_id': execution.get('execution_id'),
+                            'quality_score': output_data.get('quality_score'),
+                            'predicted_response_rate': output_data.get('predicted_response_rate'),
+                            'word_count': output_data.get('word_count'),
+                            'timestamp': execution.get('completed_at') or execution.get('created_at'),
+                            'status': execution.get('status'),
+                            'channel': output_data.get('channel', 'linkedin')
+                        })
+            
+            if evaluation_results:
+                # Calculate summary statistics
+                quality_scores = [r['quality_score'] for r in evaluation_results if r.get('quality_score')]
+                response_rates = [r['predicted_response_rate'] for r in evaluation_results if r.get('predicted_response_rate')]
+                
+                eval_summary = {
+                    'total_evaluations': len(evaluation_results),
+                    'average_quality_score': sum(quality_scores) / len(quality_scores) if quality_scores else 0,
+                    'average_response_rate': sum(response_rates) / len(response_rates) if response_rates else 0,
+                    'recent_evaluations': evaluation_results[:10],  # Last 10 evaluations
+                    'by_status': {
+                        'success': len([r for r in evaluation_results if r.get('status') == 'completed']),
+                        'failed': len([r for r in evaluation_results if r.get('status') == 'failed']),
+                        'running': len([r for r in evaluation_results if r.get('status') == 'running'])
+                    },
+                    'timestamp': datetime.now().isoformat()
+                }
+        except Exception as e:
+            log_error(logger, f"Failed to get evaluation data from executions: {e}")
+            eval_summary = {
+                'message': 'No evaluation data available',
+                'error': str(e),
+                'timestamp': datetime.now().isoformat()
+            }
+    
+    return eval_summary
 
 
 @app.get("/api/evaluation/metrics",
@@ -592,6 +669,24 @@ async def get_evaluation_metrics():
     
     # Get recent evaluation history
     recent_results = db_manager.get_evaluation_history(limit=30)
+    
+    # If no database results, get from execution manager
+    if not recent_results:
+        try:
+            recent_executions = execution_manager.get_all_executions(limit=30)
+            recent_results = []
+            for execution in recent_executions:
+                if execution.get('output_data') and isinstance(execution['output_data'], dict):
+                    output_data = execution['output_data']
+                    if output_data.get('quality_score'):
+                        recent_results.append({
+                            'quality_score': output_data.get('quality_score'),
+                            'timestamp': execution.get('completed_at') or execution.get('created_at'),
+                            'channel': output_data.get('channel', 'linkedin'),
+                            'score': output_data.get('quality_score', 0) / 100.0  # Normalize to 0-1
+                        })
+        except Exception as e:
+            log_warning(logger, f"Failed to get evaluation data from executions: {e}")
     
     # Calculate trends
     recent_trends = []
@@ -940,6 +1035,164 @@ async def get_system_health():
         "performance": performance_metrics,
         "timestamp": datetime.now().isoformat(),
         "status": "healthy"
+    }
+
+
+@app.post("/api/validate/inputs",
+         summary="Validate workflow inputs",
+         description="Validate workflow inputs with intelligent suggestions and auto-corrections",
+         response_model=Dict[str, Any],
+         responses={
+             200: {"description": "Validation results with suggestions"},
+             400: {"description": "Invalid request"},
+             500: {"description": "Internal server error"}
+         })
+@with_error_handling("Failed to validate inputs")
+async def validate_inputs(data: Dict[str, Any]):
+    """
+    Validate workflow inputs and provide intelligent suggestions.
+    
+    Args:
+        data: Dictionary containing workflow inputs to validate
+        
+    Returns:
+        Validation results including errors, warnings, suggestions, and auto-corrections
+    """
+    validation_result = validate_workflow_inputs(data)
+    return validation_result
+
+
+@app.post("/api/enrich/context",
+         summary="Enrich workflow context",
+         description="Automatically enrich workflow inputs with additional context",
+         response_model=Dict[str, Any],
+         responses={
+             200: {"description": "Enriched context data"},
+             400: {"description": "Invalid request"},
+             500: {"description": "Internal server error"}
+         })
+@with_error_handling("Failed to enrich context")
+async def enrich_context(data: Dict[str, Any]):
+    """
+    Enrich workflow inputs with additional context from various sources.
+    
+    Args:
+        data: Dictionary containing workflow inputs
+        
+    Returns:
+        Enriched inputs with additional context like industry, company size, talking points
+    """
+    enriched_data = await enrich_workflow_context(data)
+    return enriched_data
+
+
+@app.get("/api/input-templates",
+         summary="Get input templates",
+         description="Retrieve available input templates for different scenarios",
+         response_model=Dict[str, Any],
+         responses={
+             200: {"description": "List of available templates"},
+             500: {"description": "Internal server error"}
+         })
+@with_error_handling("Failed to retrieve input templates")
+async def get_input_templates():
+    """
+    Get available input templates for different outreach scenarios.
+    
+    Returns:
+        Dictionary containing templates and quick-fill options
+    """
+    import os
+    templates_path = os.path.join("config", "input_templates", "templates.json")
+    
+    try:
+        with open(templates_path, 'r') as f:
+            templates = json.load(f)
+        return templates
+    except FileNotFoundError:
+        return {"templates": [], "quick_fills": {}}
+    except Exception as e:
+        log_error(logger, f"Error loading templates: {e}")
+        raise ExternalServiceError(f"Failed to load templates: {str(e)}")
+
+
+@app.get("/api/dashboard/data",
+         summary="Get all dashboard data",
+         description="Retrieve all data needed for the dashboard in a single request",
+         response_model=Dict[str, Any],
+         responses={
+             200: {"description": "Dashboard data retrieved successfully"},
+             500: {"description": "Internal server error"}
+         })
+@with_error_handling("Failed to retrieve dashboard data")
+async def get_dashboard_data():
+    """
+    Get all dashboard data in a single composite endpoint.
+    
+    This endpoint combines multiple data sources:
+    - Agents configuration
+    - Prompts configuration
+    - Workflows configuration
+    - Tools configuration
+    - System health status
+    
+    Returns:
+        dict: Combined dashboard data from all sources
+    """
+    # Get agents
+    try:
+        from config_api import get_agents
+        agents_response = await get_agents()
+        agents = agents_response.get("agents", [])
+    except Exception as e:
+        log_error(logger, f"Error getting agents: {str(e)}")
+        agents = []
+    
+    # Get prompts
+    try:
+        from config_api import get_prompts
+        prompts_response = await get_prompts()
+        prompts = prompts_response.get("prompts", [])
+    except Exception as e:
+        log_error(logger, f"Error getting prompts: {str(e)}")
+        prompts = []
+    
+    # Get workflows
+    try:
+        from config_api import get_workflows
+        workflows_response = await get_workflows()
+        workflows = workflows_response.get("workflows", [])
+    except Exception as e:
+        log_error(logger, f"Error getting workflows: {str(e)}")
+        workflows = []
+    
+    # Get tools
+    try:
+        from config_api import get_tools
+        tools_response = await get_tools()
+        tools = tools_response.get("tools", [])
+    except Exception as e:
+        log_error(logger, f"Error getting tools: {str(e)}")
+        tools = []
+    
+    # Get system health
+    try:
+        system_health = await get_system_health()
+    except Exception as e:
+        log_error(logger, f"Error getting system health: {str(e)}")
+        system_health = {
+            "status": "unknown",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+    
+    return {
+        "agents": agents,
+        "prompts": prompts,
+        "workflows": workflows,
+        "tools": tools,
+        "systemHealth": system_health,
+        "timestamp": datetime.now().isoformat()
     }
 
 
@@ -2522,6 +2775,593 @@ async def evaluate_faq_answer(request: Request):
         return JSONResponse(evaluation)
     except Exception as e:
         logger.error(f"Error evaluating FAQ answer: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# Agent Performance API Endpoints
+# ============================================================================
+
+@app.get("/api/agent-performance/summary",
+         summary="Get agent performance summary",
+         description="Get overall performance summary across all agents and models")
+async def get_agent_performance_summary():
+    """Get overall agent performance summary"""
+    try:
+        summary = get_performance_summary()
+        return {
+            "success": True,
+            "data": summary
+        }
+    except Exception as e:
+        logger.error(f"Error getting performance summary: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/agent-performance/metrics/{agent_id}",
+         summary="Get agent performance metrics",
+         description="Get detailed performance metrics for a specific agent")
+async def get_agent_metrics(agent_id: str):
+    """Get performance metrics for a specific agent"""
+    try:
+        metrics = get_agent_performance_metrics(agent_id)
+        return {
+            "success": True,
+            "agent_id": agent_id,
+            "data": metrics
+        }
+    except Exception as e:
+        logger.error(f"Error getting agent metrics for {agent_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/agent-performance/select-model",
+          summary="Get best model for task",
+          description="Use dynamic selection to get the best model for a given agent and task")
+async def select_model_for_task(request: Dict[str, Any]):
+    """Select the best model for an agent and task"""
+    try:
+        agent_id = request.get("agent_id")
+        task_data = request.get("task_data")
+        available_models = request.get("available_models")
+        
+        if not agent_id or not task_data:
+            raise HTTPException(
+                status_code=400, 
+                detail="agent_id and task_data are required"
+            )
+        
+        selected_model, metadata = select_best_model(
+            agent_id, task_data, available_models
+        )
+        
+        return {
+            "success": True,
+            "agent_id": agent_id,
+            "selected_model": selected_model,
+            "selection_metadata": metadata
+        }
+    except Exception as e:
+        logger.error(f"Error selecting model: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/agent-performance/track-execution",
+          summary="Track agent execution",
+          description="Track performance data for an agent execution")
+async def track_execution(request: Dict[str, Any]):
+    """Track an agent execution for performance monitoring"""
+    try:
+        agent_id = request.get("agent_id")
+        model_name = request.get("model_name")
+        execution_time = request.get("execution_time")
+        success = request.get("success")
+        quality_score = request.get("quality_score")
+        cost = request.get("cost")
+        task_data = request.get("task_data")
+        metadata = request.get("metadata")
+        
+        if not all([agent_id, model_name, execution_time is not None, success is not None]):
+            raise HTTPException(
+                status_code=400,
+                detail="agent_id, model_name, execution_time, and success are required"
+            )
+        
+        track_agent_execution(
+            agent_id=agent_id,
+            model_name=model_name,
+            execution_time=execution_time,
+            success=success,
+            quality_score=quality_score,
+            cost=cost,
+            task_data=task_data,
+            metadata=metadata
+        )
+        
+        return {
+            "success": True,
+            "message": "Execution tracked successfully"
+        }
+    except Exception as e:
+        logger.error(f"Error tracking execution: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# Batch Processing API Endpoints
+# ============================================================================
+
+@app.post("/api/batch/create",
+          summary="Create batch processing job",
+          description="Create a new batch processing job for multiple workflow executions")
+async def create_batch_processing_job(request: Dict[str, Any]):
+    """Create a new batch processing job"""
+    try:
+        name = request.get("name")
+        workflow_id = request.get("workflow_id")
+        input_list = request.get("input_list", [])
+        config_override = request.get("config", {})
+        
+        if not name or not workflow_id or not input_list:
+            raise HTTPException(
+                status_code=400,
+                detail="name, workflow_id, and input_list are required"
+            )
+        
+        if not isinstance(input_list, list) or len(input_list) == 0:
+            raise HTTPException(
+                status_code=400,
+                detail="input_list must be a non-empty list"
+            )
+        
+        batch_id = await create_batch(
+            name=name,
+            workflow_id=workflow_id,
+            input_list=input_list,
+            config_override=config_override
+        )
+        
+        return {
+            "success": True,
+            "batch_id": batch_id,
+            "message": f"Created batch with {len(input_list)} jobs"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error creating batch: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/batch/{batch_id}/start",
+          summary="Start batch processing",
+          description="Start processing a created batch")
+async def start_batch_processing(batch_id: str):
+    """Start processing a batch"""
+    try:
+        success = await start_batch(batch_id)
+        
+        if not success:
+            raise HTTPException(status_code=404, detail="Batch not found")
+        
+        return {
+            "success": True,
+            "batch_id": batch_id,
+            "message": "Batch processing started"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error starting batch {batch_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/batch/{batch_id}/status",
+         summary="Get batch status",
+         description="Get current status and progress of a batch")
+async def get_batch_processing_status(batch_id: str):
+    """Get batch processing status"""
+    try:
+        status = get_batch_status(batch_id)
+        
+        if not status:
+            raise HTTPException(status_code=404, detail="Batch not found")
+        
+        return {
+            "success": True,
+            "data": status
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting batch status {batch_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/batch/{batch_id}/results",
+         summary="Get batch results",
+         description="Get detailed results of a completed batch")
+async def get_batch_processing_results(
+    batch_id: str, 
+    include_details: bool = Query(False, description="Include job input/output details")
+):
+    """Get batch processing results"""
+    try:
+        results = get_batch_results(batch_id, include_details)
+        
+        if not results:
+            raise HTTPException(status_code=404, detail="Batch not found")
+        
+        # Convert BatchResult dataclass to dict
+        return {
+            "success": True,
+            "data": {
+                "batch_id": results.batch_id,
+                "total_jobs": results.total_jobs,
+                "completed_jobs": results.completed_jobs,
+                "failed_jobs": results.failed_jobs,
+                "skipped_jobs": results.skipped_jobs,
+                "started_at": results.started_at.isoformat(),
+                "completed_at": results.completed_at.isoformat() if results.completed_at else None,
+                "total_execution_time": results.total_execution_time,
+                "average_job_time": results.average_job_time,
+                "success_rate": results.success_rate,
+                "results": results.results,
+                "errors": results.errors,
+                "summary": results.summary
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting batch results {batch_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/batch/list",
+         summary="List batches",
+         description="List all batches with optional status filtering")
+async def list_batch_jobs(
+    status: Optional[str] = Query(None, description="Filter by status"),
+    limit: int = Query(50, description="Maximum number of batches to return")
+):
+    """List batch processing jobs"""
+    try:
+        batches = list_batches(status_filter=status, limit=limit)
+        
+        return {
+            "success": True,
+            "data": batches,
+            "count": len(batches)
+        }
+        
+    except Exception as e:
+        logger.error(f"Error listing batches: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/batch/{batch_id}/cancel",
+          summary="Cancel batch processing",
+          description="Cancel a running batch")
+async def cancel_batch_processing(batch_id: str):
+    """Cancel batch processing"""
+    try:
+        success = await cancel_batch(batch_id)
+        
+        if not success:
+            raise HTTPException(status_code=404, detail="Batch not found or not cancellable")
+        
+        return {
+            "success": True,
+            "batch_id": batch_id,
+            "message": "Batch processing cancelled"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error cancelling batch {batch_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/batch/create-and-start",
+          summary="Create and start batch",
+          description="Create and immediately start a batch processing job")
+async def create_and_start_batch(request: Dict[str, Any]):
+    """Create and immediately start a batch processing job"""
+    try:
+        # Create the batch first
+        name = request.get("name")
+        workflow_id = request.get("workflow_id")
+        input_list = request.get("input_list", [])
+        config_override = request.get("config", {})
+        
+        if not name or not workflow_id or not input_list:
+            raise HTTPException(
+                status_code=400,
+                detail="name, workflow_id, and input_list are required"
+            )
+        
+        batch_id = await create_batch(
+            name=name,
+            workflow_id=workflow_id,
+            input_list=input_list,
+            config_override=config_override
+        )
+        
+        # Start the batch immediately
+        await start_batch(batch_id)
+        
+        return {
+            "success": True,
+            "batch_id": batch_id,
+            "message": f"Created and started batch with {len(input_list)} jobs"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error creating and starting batch: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# Feedback System API Endpoints  
+# ============================================================================
+
+@app.post("/api/feedback/submit",
+          summary="Submit feedback", 
+          description="Submit feedback for a workflow execution")
+async def submit_user_feedback(request: Dict[str, Any]):
+    """Submit feedback for a workflow execution"""
+    try:
+        execution_id = request.get("execution_id")
+        workflow_id = request.get("workflow_id")
+        feedback_type = request.get("feedback_type", "rating")
+        source = request.get("source", "user_interface")
+        user_id = request.get("user_id")
+        rating = request.get("rating")
+        content = request.get("content")
+        suggested_improvement = request.get("suggested_improvement")
+        original_output = request.get("original_output")
+        improved_output = request.get("improved_output")
+        metadata = request.get("metadata")
+        
+        if not execution_id or not workflow_id:
+            raise HTTPException(
+                status_code=400,
+                detail="execution_id and workflow_id are required"
+            )
+        
+        # Convert string enums to proper enum types
+        try:
+            feedback_type_enum = FeedbackType(feedback_type)
+            source_enum = FeedbackSource(source)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid enum value: {e}")
+        
+        feedback_id = submit_feedback(
+            execution_id=execution_id,
+            workflow_id=workflow_id,
+            feedback_type=feedback_type_enum,
+            source=source_enum,
+            user_id=user_id,
+            rating=rating,
+            content=content,
+            suggested_improvement=suggested_improvement,
+            original_output=original_output,
+            improved_output=improved_output,
+            metadata=metadata
+        )
+        
+        return {
+            "success": True,
+            "feedback_id": feedback_id,
+            "message": "Feedback submitted successfully"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error submitting feedback: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/feedback/execution/{execution_id}",
+         summary="Get feedback for execution",
+         description="Get all feedback entries for a specific execution")
+async def get_execution_feedback(execution_id: str):
+    """Get feedback for a specific execution"""
+    try:
+        feedback_list = get_feedback_for_execution(execution_id)
+        
+        # Convert to serializable format
+        feedback_data = []
+        for feedback in feedback_list:
+            feedback_dict = {
+                "id": feedback.id,
+                "execution_id": feedback.execution_id,
+                "workflow_id": feedback.workflow_id,
+                "feedback_type": feedback.feedback_type.value,
+                "source": feedback.source.value,
+                "user_id": feedback.user_id,
+                "rating": feedback.rating,
+                "content": feedback.content,
+                "suggested_improvement": feedback.suggested_improvement,
+                "original_output": feedback.original_output,
+                "improved_output": feedback.improved_output,
+                "metadata": feedback.metadata,
+                "status": feedback.status.value,
+                "created_at": feedback.created_at.isoformat() if feedback.created_at else None,
+                "reviewed_at": feedback.reviewed_at.isoformat() if feedback.reviewed_at else None,
+                "reviewed_by": feedback.reviewed_by,
+                "implementation_notes": feedback.implementation_notes
+            }
+            feedback_data.append(feedback_dict)
+        
+        return {
+            "success": True,
+            "execution_id": execution_id,
+            "feedback": feedback_data,
+            "count": len(feedback_data)
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting execution feedback: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/feedback/summary",
+         summary="Get feedback summary",
+         description="Get comprehensive feedback summary with statistics")
+async def get_feedback_summary_api(
+    workflow_id: Optional[str] = Query(None, description="Filter by workflow ID"),
+    days: int = Query(30, description="Number of days to include in summary")
+):
+    """Get feedback summary statistics"""
+    try:
+        summary = get_feedback_summary(workflow_id, days)
+        
+        # Convert to serializable format
+        summary_data = {
+            "total_feedback": summary.total_feedback,
+            "average_rating": summary.average_rating,
+            "rating_distribution": summary.rating_distribution,
+            "feedback_by_type": summary.feedback_by_type,
+            "recent_feedback_count": summary.recent_feedback_count,
+            "improvement_suggestions": summary.improvement_suggestions,
+            "implemented_improvements": summary.implemented_improvements,
+            "common_issues": summary.common_issues,
+            "top_workflows_by_feedback": summary.top_workflows_by_feedback
+        }
+        
+        return {
+            "success": True,
+            "data": summary_data,
+            "period_days": days,
+            "workflow_id": workflow_id
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting feedback summary: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/feedback/pending",
+         summary="Get pending feedback",
+         description="Get feedback entries that need review")
+async def get_pending_feedback_api(
+    limit: int = Query(50, description="Maximum number of entries to return")
+):
+    """Get pending feedback entries"""
+    try:
+        pending_feedback = get_pending_feedback(limit)
+        
+        # Convert to serializable format
+        feedback_data = []
+        for feedback in pending_feedback:
+            feedback_dict = {
+                "id": feedback.id,
+                "execution_id": feedback.execution_id,
+                "workflow_id": feedback.workflow_id,
+                "feedback_type": feedback.feedback_type.value,
+                "source": feedback.source.value,
+                "user_id": feedback.user_id,
+                "rating": feedback.rating,
+                "content": feedback.content,
+                "suggested_improvement": feedback.suggested_improvement,
+                "status": feedback.status.value,
+                "created_at": feedback.created_at.isoformat() if feedback.created_at else None
+            }
+            feedback_data.append(feedback_dict)
+        
+        return {
+            "success": True,
+            "pending_feedback": feedback_data,
+            "count": len(feedback_data)
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting pending feedback: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/feedback/{feedback_id}/status",
+          summary="Update feedback status",
+          description="Update the status of a feedback entry")
+async def update_feedback_status_api(feedback_id: str, request: Dict[str, Any]):
+    """Update feedback status"""
+    try:
+        status = request.get("status")
+        reviewed_by = request.get("reviewed_by")
+        implementation_notes = request.get("implementation_notes")
+        
+        if not status:
+            raise HTTPException(status_code=400, detail="status is required")
+        
+        try:
+            status_enum = FeedbackStatus(status)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid status value")
+        
+        success = update_feedback_status(
+            feedback_id, status_enum, reviewed_by, implementation_notes
+        )
+        
+        if not success:
+            raise HTTPException(status_code=404, detail="Feedback not found")
+        
+        return {
+            "success": True,
+            "feedback_id": feedback_id,
+            "message": "Feedback status updated successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating feedback status: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/feedback/workflow/{workflow_id}",
+         summary="Get workflow feedback",
+         description="Get all feedback for a specific workflow")
+async def get_workflow_feedback(
+    workflow_id: str,
+    limit: int = Query(100, description="Maximum number of entries to return")
+):
+    """Get feedback for a specific workflow"""
+    try:
+        from feedback_system import feedback_system
+        feedback_list = feedback_system.get_feedback_for_workflow(workflow_id, limit)
+        
+        # Convert to serializable format
+        feedback_data = []
+        for feedback in feedback_list:
+            feedback_dict = {
+                "id": feedback.id,
+                "execution_id": feedback.execution_id,
+                "workflow_id": feedback.workflow_id,
+                "feedback_type": feedback.feedback_type.value,
+                "source": feedback.source.value,
+                "user_id": feedback.user_id,
+                "rating": feedback.rating,
+                "content": feedback.content,
+                "suggested_improvement": feedback.suggested_improvement,
+                "status": feedback.status.value,
+                "created_at": feedback.created_at.isoformat() if feedback.created_at else None,
+                "reviewed_at": feedback.reviewed_at.isoformat() if feedback.reviewed_at else None
+            }
+            feedback_data.append(feedback_dict)
+        
+        return {
+            "success": True,
+            "workflow_id": workflow_id,
+            "feedback": feedback_data,
+            "count": len(feedback_data)
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting workflow feedback: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

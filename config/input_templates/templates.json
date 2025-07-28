@@ -1,0 +1,243 @@
+{
+  "templates": [
+    {
+      "id": "tech-startup-intro",
+      "name": "Tech Startup Introduction",
+      "description": "Initial outreach to technology startup executives",
+      "category": "Technology",
+      "channel": "linkedin",
+      "fields": {
+        "conversation_thread": "Hi {{first_name}}, I noticed your recent post about {{topic}}. As someone working in {{industry}}, I found your perspective on {{specific_point}} particularly insightful.",
+        "message_context": "Introducing our {{solution_type}} platform that helps fast-growing tech companies {{value_proposition}}. We've helped similar companies achieve {{key_metric}}.",
+        "your_company": "",
+        "your_role": "",
+        "variables": {
+          "first_name": "Prospect's first name",
+          "topic": "Topic they posted about",
+          "industry": "Their industry",
+          "specific_point": "Specific point from their post",
+          "solution_type": "Your solution category",
+          "value_proposition": "Main value you provide",
+          "key_metric": "Key achievement metric"
+        }
+      }
+    },
+    {
+      "id": "sales-leader-followup",
+      "name": "Sales Leader Follow-up",
+      "description": "Follow-up message for sales leaders after initial connection",
+      "category": "Sales",
+      "channel": "linkedin",
+      "fields": {
+        "conversation_thread": "Thanks for connecting, {{first_name}}! I see you're leading sales at {{company}}. Given your focus on {{sales_focus}}, I thought you might find this relevant.",
+        "message_context": "Helping sales leaders accelerate pipeline velocity and improve win rates through {{approach}}. Particularly relevant for teams dealing with {{challenge}}.",
+        "variables": {
+          "first_name": "Prospect's first name",
+          "company": "Their company",
+          "sales_focus": "Their sales focus area",
+          "approach": "Your approach/methodology",
+          "challenge": "Common challenge they face"
+        }
+      }
+    },
+    {
+      "id": "enterprise-decision-maker",
+      "name": "Enterprise Decision Maker",
+      "description": "Outreach to C-level or VP-level executives at large companies",
+      "category": "Enterprise",
+      "channel": "email",
+      "fields": {
+        "conversation_thread": "Subject: {{company}} + {{your_company}} - {{value_prop_short}}\n\nHi {{first_name}},\n\nI noticed {{company}}'s recent {{initiative}}. Many {{peer_companies}} in your space are leveraging {{solution_category}} to {{outcome}}.",
+        "message_context": "Enterprise-focused approach emphasizing ROI, security, and scalability. Reference implementation with {{similar_company}} resulted in {{specific_result}}.",
+        "variables": {
+          "company": "Their company name",
+          "your_company": "Your company name",
+          "value_prop_short": "Short value proposition",
+          "first_name": "Prospect's first name",
+          "initiative": "Recent company initiative",
+          "peer_companies": "Similar companies",
+          "solution_category": "Your solution category",
+          "outcome": "Key business outcome",
+          "similar_company": "Reference customer",
+          "specific_result": "Specific measurable result"
+        }
+      }
+    },
+    {
+      "id": "fintech-innovation",
+      "name": "FinTech Innovation Partner",
+      "description": "Reaching out to fintech companies about innovation partnerships",
+      "category": "Finance",
+      "channel": "linkedin",
+      "fields": {
+        "conversation_thread": "Hi {{first_name}}, Impressive work on {{achievement}}. In the current {{market_condition}} environment, how is {{company}} approaching {{challenge_area}}?",
+        "message_context": "Partnering with innovative fintech companies to navigate {{regulatory_area}} while accelerating {{business_metric}}. Focus on {{specific_solution}}.",
+        "variables": {
+          "first_name": "Prospect's first name",
+          "achievement": "Recent company achievement",
+          "market_condition": "Current market condition",
+          "company": "Their company",
+          "challenge_area": "Key challenge area",
+          "regulatory_area": "Relevant regulation",
+          "business_metric": "Key business metric",
+          "specific_solution": "Your specific solution"
+        }
+      }
+    },
+    {
+      "id": "healthcare-digital-transformation",
+      "name": "Healthcare Digital Transformation",
+      "description": "Outreach to healthcare organizations about digital initiatives",
+      "category": "Healthcare",
+      "channel": "email",
+      "fields": {
+        "conversation_thread": "Subject: Improving Patient Outcomes at {{organization}}\n\nDear {{title}} {{last_name}},\n\nWith {{organization}}'s commitment to {{mission_aspect}}, I wanted to share how we're helping similar healthcare providers {{value_statement}}.",
+        "message_context": "HIPAA-compliant solutions for healthcare digital transformation. Focus on {{care_area}} with demonstrated {{outcome_metric}} improvement.",
+        "variables": {
+          "organization": "Healthcare organization name",
+          "title": "Their title (Dr., etc.)",
+          "last_name": "Prospect's last name",
+          "mission_aspect": "Aspect of their mission",
+          "value_statement": "Value you provide",
+          "care_area": "Specific care area",
+          "outcome_metric": "Patient outcome metric"
+        }
+      }
+    },
+    {
+      "id": "warm-referral",
+      "name": "Warm Referral Introduction",
+      "description": "Introduction through a mutual connection",
+      "category": "Referral",
+      "channel": "linkedin",
+      "fields": {
+        "conversation_thread": "Hi {{first_name}}, {{mutual_connection}} suggested I reach out to you. They mentioned you're {{current_focus}} at {{company}}.",
+        "message_context": "Following up on {{mutual_connection}}'s introduction. They thought our work in {{area_of_expertise}} might be relevant to your {{specific_initiative}}.",
+        "variables": {
+          "first_name": "Prospect's first name",
+          "mutual_connection": "Name of mutual connection",
+          "current_focus": "What they're working on",
+          "company": "Their company",
+          "area_of_expertise": "Your expertise area",
+          "specific_initiative": "Their specific initiative"
+        }
+      }
+    },
+    {
+      "id": "event-followup",
+      "name": "Event Follow-up",
+      "description": "Following up after meeting at an event or webinar",
+      "category": "Event",
+      "channel": "linkedin",
+      "fields": {
+        "conversation_thread": "Hi {{first_name}}, Great meeting you at {{event_name}}! I really enjoyed our conversation about {{topic_discussed}}.",
+        "message_context": "Following up from {{event_name}}. As discussed, we help companies like {{company}} achieve {{specific_outcome}} through {{approach}}.",
+        "variables": {
+          "first_name": "Prospect's first name",
+          "event_name": "Name of the event",
+          "topic_discussed": "Topic you discussed",
+          "company": "Their company",
+          "specific_outcome": "Specific business outcome",
+          "approach": "Your approach"
+        }
+      }
+    },
+    {
+      "id": "competitive-replacement",
+      "name": "Competitive Replacement",
+      "description": "Reaching out to companies using competitor solutions",
+      "category": "Competitive",
+      "channel": "email",
+      "fields": {
+        "conversation_thread": "Subject: {{company}} - A Better Alternative to {{competitor}}\n\nHi {{first_name}},\n\nI noticed {{company}} is using {{competitor}}. While they're a good solution, many companies have switched to us for {{key_differentiator}}.",
+        "message_context": "Companies switching from {{competitor}} typically see {{improvement_metric}} improvement in {{timeframe}}. Key advantages include {{advantage_list}}.",
+        "variables": {
+          "company": "Their company",
+          "competitor": "Competitor they use",
+          "first_name": "Prospect's first name",
+          "key_differentiator": "Main differentiator",
+          "improvement_metric": "Improvement metric",
+          "timeframe": "Timeframe for results",
+          "advantage_list": "List of advantages"
+        }
+      }
+    },
+    {
+      "id": "expansion-opportunity",
+      "name": "Expansion Opportunity",
+      "description": "Reaching out about expansion or growth initiatives",
+      "category": "Growth",
+      "channel": "linkedin",
+      "fields": {
+        "conversation_thread": "Hi {{first_name}}, Congratulations on {{recent_milestone}}! With {{company}}'s expansion into {{new_area}}, I imagine {{challenge}} is top of mind.",
+        "message_context": "Supporting high-growth companies through expansion phases. Our {{solution}} helps address {{specific_challenge}} while maintaining {{important_factor}}.",
+        "variables": {
+          "first_name": "Prospect's first name",
+          "recent_milestone": "Recent company milestone",
+          "company": "Their company",
+          "new_area": "Area they're expanding into",
+          "challenge": "Challenge they face",
+          "solution": "Your solution",
+          "specific_challenge": "Specific challenge",
+          "important_factor": "Important business factor"
+        }
+      }
+    },
+    {
+      "id": "problem-solution",
+      "name": "Problem-Solution Fit",
+      "description": "Direct approach addressing a specific problem",
+      "category": "Direct",
+      "channel": "email",
+      "fields": {
+        "conversation_thread": "Subject: Solving {{specific_problem}} at {{company}}\n\nHi {{first_name}},\n\nI'll keep this brief. We help companies like {{company}} solve {{specific_problem}} by {{solution_approach}}.",
+        "message_context": "Direct value proposition focusing on {{problem_area}}. Typical results include {{result_1}}, {{result_2}}, and {{result_3}}.",
+        "variables": {
+          "specific_problem": "Specific problem",
+          "company": "Their company",
+          "first_name": "Prospect's first name",
+          "solution_approach": "How you solve it",
+          "problem_area": "Problem area",
+          "result_1": "First key result",
+          "result_2": "Second key result",
+          "result_3": "Third key result"
+        }
+      }
+    }
+  ],
+  "quick_fills": {
+    "your_company": {
+      "description": "Common company names for quick selection",
+      "values": [
+        "Acme Corp",
+        "TechStartup Inc",
+        "Global Solutions Ltd",
+        "Innovation Partners"
+      ]
+    },
+    "your_role": {
+      "description": "Common roles for quick selection",
+      "values": [
+        "Business Development Manager",
+        "Account Executive",
+        "Sales Director",
+        "Partnership Manager",
+        "Customer Success Manager",
+        "Solutions Architect",
+        "CEO",
+        "Founder"
+      ]
+    },
+    "message_context": {
+      "description": "Common value propositions",
+      "values": [
+        "Helping companies accelerate digital transformation",
+        "Enabling data-driven decision making",
+        "Streamlining operations through automation",
+        "Improving customer experience and retention",
+        "Reducing costs while scaling operations",
+        "Ensuring compliance and security"
+      ]
+    }
+  }
+}

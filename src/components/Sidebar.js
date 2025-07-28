@@ -8,31 +8,31 @@ import {
   Wrench, 
   Settings,
   X,
-  Sparkles,
   Activity,
-  Users,
   Database,
   Eye,
   BarChart3,
-  ListChecks,
   BookOpen,
-  List
+  Sparkles,
+  Layers,
+  Brain,
+  Users
 } from 'lucide-react';
 import clsx from 'clsx';
 
 const navigationItems = [
   {
-    name: 'Run Workflow',
-    href: '/run',
-    icon: Sparkles,
-    description: 'Test your workflow',
-    highlight: true
-  },
-  {
     name: 'Dashboard',
     href: '/dashboard',
     icon: LayoutDashboard,
     description: 'Overview and system status'
+  },
+  {
+    name: 'Workflows',
+    href: '/workflows',
+    icon: GitBranch,
+    description: 'Build, run, and track workflows',
+    highlight: true
   },
   {
     name: 'Agents',
@@ -47,22 +47,10 @@ const navigationItems = [
     description: 'Manage prompt templates'
   },
   {
-    name: 'Workflows',
-    href: '/workflows',
-    icon: GitBranch,
-    description: 'Build and edit workflows'
-  },
-  {
-    name: 'Model Management',
+    name: 'Models',
     href: '/models',
     icon: Database,
-    description: 'Add and manage Azure OpenAI models'
-  },
-  {
-    name: 'Model Assignments',
-    href: '/model-assignments',
-    icon: ListChecks,
-    description: 'Review agent/model assignments'
+    description: 'Configure models and assignments'
   },
   {
     name: 'Observability',
@@ -77,11 +65,34 @@ const navigationItems = [
     description: 'LLM output evaluation and feedback'
   },
   {
-    name: 'All Runs',
-    href: '/all-runs',
-    icon: List,
-    description: 'View all workflow runs',
-    highlight: true
+    name: 'Performance',
+    href: '/performance',
+    icon: Activity,
+    description: 'Performance monitoring dashboard'
+  },
+  {
+    name: 'Batch Processing',
+    href: '/batch-processing',
+    icon: Layers,
+    description: 'Bulk workflow processing with queuing',
+    highlight: true,
+    new: true
+  },
+  {
+    name: 'Agent Performance',
+    href: '/agent-performance',
+    icon: Brain,
+    description: 'Dynamic model selection and metrics',
+    highlight: true,
+    new: true
+  },
+  {
+    name: 'Feedback',
+    href: '/feedback',
+    icon: Users,
+    description: 'User feedback and quality analysis',
+    highlight: true,
+    new: true
   },
   {
     name: 'Knowledge Base',
@@ -174,7 +185,14 @@ function Sidebar({ open, onClose, currentPage, onPageChange }) {
                     : 'text-secondary-400 group-hover:text-secondary-600'
                 )} />
                 <div className="flex-1">
-                  <div className="text-sm font-medium">{item.name}</div>
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm font-medium">{item.name}</div>
+                    {item.new && (
+                      <span className="inline-flex px-1.5 py-0.5 text-xs font-semibold bg-green-100 text-green-800 rounded-full">
+                        NEW
+                      </span>
+                    )}
+                  </div>
                   <div className="text-xs text-secondary-500 mt-0.5">{item.description}</div>
                 </div>
               </Link>

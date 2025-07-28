@@ -17,6 +17,9 @@ from main import safe_exec_python
 from simple_observability import simple_observability as observability_manager
 from evaluation_system import evaluation_system, EvaluationMetric
 from database import get_database_manager
+from agent_performance import select_best_model, track_agent_execution
+from input_validator import validate_workflow_inputs
+from context_enricher import enrich_workflow_context
 
 logger = logging.getLogger(__name__)
 
@@ -29,22 +32,41 @@ class WorkflowExecutor:
         self.agent_cache = {}
         self.prompt_cache = {}
 
-    def _get_llm_for_agent(self, agent_config):
-        """Instantiate the LLM for the agent based on its model_id"""
+    def _get_llm_for_agent(self, agent_config, task_data=None):
+        """Instantiate the LLM for the agent based on dynamic model selection"""
+        # Use dynamic model selection if task data is available
+        if task_data and hasattr(agent_config, 'id'):
+            try:
+                selected_model, selection_metadata = select_best_model(
+                    agent_id=agent_config.id,
+                    task_data=task_data
+                )
+                
+                # If a different model is selected, update the config
+                if selected_model != agent_config.model_id:
+                    logger.info(f"Dynamic selection: Using {selected_model} instead of {agent_config.model_id} for agent {agent_config.id}")
+                    agent_config.model_id = selected_model
+                    agent_config._selection_metadata = selection_metadata
+                    
+            except Exception as e:
+                logger.warning(f"Dynamic model selection failed, using default: {e}")
+        
         # Always use the working Azure OpenAI configuration from agents.py
         from agents import llm
         return llm
 
-    def _get_agent_from_config(self, agent_id: str) -> Agent:
-        """Get agent instance from configuration"""
-        if agent_id in self.agent_cache:
-            return self.agent_cache[agent_id]
+    def _get_agent_from_config(self, agent_id: str, task_data=None) -> Agent:
+        """Get agent instance from configuration with dynamic model selection"""
+        # Don't cache agents when using dynamic selection
+        cache_key = agent_id if not task_data else None
+        if cache_key and cache_key in self.agent_cache:
+            return self.agent_cache[cache_key]
 
         agent_config = self.config_manager.load_agent_config(agent_id)
         if not agent_config:
             raise ValueError(f"Agent configuration not found: {agent_id}")
 
-        llm_instance = self._get_llm_for_agent(agent_config)
+        llm_instance = self._get_llm_for_agent(agent_config, task_data)
         agent = Agent(
             role=agent_config.role,
             goal=agent_config.goal,
@@ -56,7 +78,13 @@ class WorkflowExecutor:
             allow_delegation=agent_config.allow_delegation,
         )
 
-        self.agent_cache[agent_id] = agent
+        # Store selection metadata in agent for tracking
+        if hasattr(agent_config, '_selection_metadata'):
+            agent._selection_metadata = agent_config._selection_metadata
+            agent._selected_model = agent_config.model_id
+
+        if cache_key:
+            self.agent_cache[cache_key] = agent
         return agent
 
     def _get_prompt_template(self, prompt_id: str) -> str:
@@ -86,8 +114,8 @@ class WorkflowExecutor:
         start_time = time.time()
 
         try:
-            # Get agent from configuration
-            agent = self._get_agent_from_config(agent_id)
+            # Get agent from configuration with dynamic selection
+            agent = self._get_agent_from_config(agent_id, test_input)
 
             # Create test task
             task_description = test_input.get("task_description", "Test task")
@@ -118,6 +146,16 @@ class WorkflowExecutor:
             result = str(crew_output.raw)  # Extract the actual output text
             execution_time = time.time() - start_time
 
+            # Track agent performance
+            selected_model = getattr(agent, '_selected_model', 'default')
+            track_agent_execution(
+                agent_id=agent_id,
+                model_name=selected_model,
+                execution_time=execution_time,
+                success=True,
+                task_data=test_input
+            )
+
             # Save test result
             self.config_manager.save_test_result(
                 "agent",
@@ -135,11 +173,23 @@ class WorkflowExecutor:
                 "execution_time": execution_time,
                 "status": "success",
                 "timestamp": datetime.now().isoformat(),
+                "selected_model": selected_model,
+                "selection_metadata": getattr(agent, '_selection_metadata', {})
             }
 
         except Exception as e:
             execution_time = time.time() - start_time
             error_message = str(e)
+
+            # Track failed execution
+            selected_model = getattr(agent, '_selected_model', 'default') if 'agent' in locals() else 'default'
+            track_agent_execution(
+                agent_id=agent_id,
+                model_name=selected_model,
+                execution_time=execution_time,
+                success=False,
+                task_data=test_input
+            )
 
             # Save test result
             self.config_manager.save_test_result(
@@ -254,7 +304,8 @@ class WorkflowExecutor:
                 code = step.get("code", "")
                 result = await asyncio.to_thread(safe_exec_python, code, input_data)
             elif step.get("agent_id"):
-                agent = self._get_agent_from_config(step["agent_id"])
+                # Get agent with dynamic selection based on input data
+                agent = self._get_agent_from_config(step["agent_id"], input_data)
 
                 # Get prompt template if specified
                 prompt_template = ""
@@ -277,8 +328,21 @@ class WorkflowExecutor:
                     tasks=[task],
                     verbose=False
                 )
+                
+                step_start_time = time.time()
                 crew_output = await asyncio.to_thread(crew.kickoff)
                 result = str(crew_output.raw)  # Extract the actual output text
+                step_execution_time = time.time() - step_start_time
+
+                # Track agent performance
+                selected_model = getattr(agent, '_selected_model', 'default')
+                track_agent_execution(
+                    agent_id=step["agent_id"],
+                    model_name=selected_model,
+                    execution_time=step_execution_time,
+                    success=True,
+                    task_data=input_data
+                )
             else:
                 # Handle non-agent steps
                 result = f"Executed step: {step['name']}"
@@ -309,6 +373,17 @@ class WorkflowExecutor:
         except Exception as e:
             execution_time = time.time() - start_time
             error_message = str(e)
+
+            # Track failed agent execution if step was found
+            if "step" in locals() and step.get("agent_id"):
+                selected_model = 'default'  # Default since agent creation might have failed
+                track_agent_execution(
+                    agent_id=step["agent_id"],
+                    model_name=selected_model,
+                    execution_time=execution_time,
+                    success=False,
+                    task_data=input_data
+                )
 
             # Temporarily disable config_manager execution history save 
             # self.config_manager.save_execution_history(
@@ -357,6 +432,23 @@ class WorkflowExecutor:
                 workflow_id)
             if not workflow_config:
                 raise ValueError(f"Workflow not found: {workflow_id}")
+
+            # Step 1: Validate input data
+            logger.info(f"Validating inputs for workflow {workflow_id}")
+            validation_result = await validate_workflow_inputs(input_data)
+            if not validation_result.get("is_valid", True):
+                logger.warning(f"Input validation failed: {validation_result.get('errors', [])}")
+                # Auto-fix if possible
+                if validation_result.get("auto_fixed_data"):
+                    input_data.update(validation_result["auto_fixed_data"])
+                    logger.info("Applied auto-fixes to input data")
+
+            # Step 2: Enrich context with missing information
+            logger.info(f"Enriching context for workflow {workflow_id}")
+            enriched_data = await enrich_workflow_context(input_data)
+            if enriched_data != input_data:
+                input_data.update(enriched_data)
+                logger.info("Enhanced input data with additional context")
 
             # Sort steps by order
             steps = sorted(

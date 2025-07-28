@@ -17,6 +17,7 @@ import {
   Send
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { FeedbackSystem } from './FeedbackSystem';
 
 const fetchExecutionHistory = async () => {
   const response = await fetch('/api/execution-history');
@@ -402,6 +403,17 @@ const ExecutionHistory = () => {
                         </div>
                       </div>
                     </div>
+                  </div>
+                )}
+
+                {/* Feedback System */}
+                {selectedExecution.output && (
+                  <div className="mt-6">
+                    <FeedbackSystem 
+                      executionId={selectedExecution.id}
+                      workflowId={selectedExecution.workflow_id || 'default_workflow'}
+                      outputContent={selectedExecution.output.message}
+                    />
                   </div>
                 )}
 

@@ -3,25 +3,24 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 import { scan } from 'react-scan';
+import { DataProvider } from './contexts/DataContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import { AsyncErrorBoundary } from './components/AsyncErrorBoundary';
+import Dashboard from './components/Dashboard';
 import AgentManager from './components/AgentManager';
 import PromptManager from './components/PromptManager';
-import WorkflowVisualization from './components/WorkflowVisualization';
-import InteractiveDashboard from './components/InteractiveDashboard';
 import PerformanceDashboard from './components/PerformanceDashboard';
-import EnhancedPromptEditor from './components/EnhancedPromptEditor';
 import ObservabilityDashboard from './pages/ObservabilityDashboard';
 import EvaluationDashboard from './pages/EvaluationDashboard';
-import ModelManagement from './pages/ModelManagement';
-import ModelAssignments from './pages/ModelAssignments';
-import WorkflowBuilder from './components/WorkflowBuilder';
+import WorkflowsPage from './pages/WorkflowsPage';
+import ModelsPage from './pages/ModelsPage';
+import BatchProcessing from './pages/BatchProcessing';
+import AgentPerformanceDashboard from './pages/AgentPerformanceDashboard';
+import FeedbackDashboard from './pages/FeedbackDashboard';
 import ToolManager from './components/ToolManager';
 import Settings from './components/Settings';
 import Sidebar from './components/Sidebar';
 import KnowledgeBase from './components/KnowledgeBase';
-import RunWorkflow from './pages/RunWorkflow';
-import AllRuns from './pages/AllRuns';
 import './App.css';
 
 // Initialize React Scan for performance monitoring
@@ -50,122 +49,48 @@ const queryClient = new QueryClient({
 function App() {
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
   const [currentPage, setCurrentPage] = React.useState('dashboard');
-  const [agents, setAgents] = React.useState([]);
-  const [prompts, setPrompts] = React.useState([]);
-  const [executionHistory, setExecutionHistory] = React.useState([]);
-  const [testResults, setTestResults] = React.useState([]);
-  const [selectedAgent, setSelectedAgent] = React.useState(null);
-  const [selectedPrompt, setSelectedPrompt] = React.useState(null);
-  const [isLoading, setIsLoading] = React.useState(true);
-  const [activeTab, setActiveTab] = React.useState('agents');
-
-  // Load initial data
-  React.useEffect(() => {
-    const loadData = async () => {
-      try {
-        setIsLoading(true);
-        
-        // Load agents
-        const agentsResponse = await fetch('/api/config/agents');
-        if (agentsResponse.ok) {
-          const agentsData = await agentsResponse.json();
-          setAgents(agentsData);
-        }
-
-        // Load prompts
-        const promptsResponse = await fetch('/api/config/prompts');
-        if (promptsResponse.ok) {
-          const promptsData = await promptsResponse.json();
-          setPrompts(promptsData);
-        }
-
-        // Load execution history
-        const historyResponse = await fetch('/api/execution-history');
-        if (historyResponse.ok) {
-          const historyData = await historyResponse.json();
-          setExecutionHistory(historyData);
-        }
-
-        // Load test results
-        const testResponse = await fetch('/api/test-results');
-        if (testResponse.ok) {
-          const testData = await testResponse.json();
-          setTestResults(testData);
-        }
-      } catch (error) {
-        console.error('Error loading data:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadData();
-  }, []);
-
-  const handleAgentSelect = (agent) => {
-    setSelectedAgent(agent);
-    setActiveTab('agents');
-  };
-
-  const handlePromptSelect = (prompt) => {
-    setSelectedPrompt(prompt);
-    setActiveTab('prompts');
-  };
-
-  const handleTabChange = (tab) => {
-    setActiveTab(tab);
-  };
-
-  if (isLoading) {
-    return (
-      <div className="loading-container">
-        <div className="loading-spinner"></div>
-        <p>Loading CrewAI Workflow System...</p>
-      </div>
-    );
-  }
 
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <AsyncErrorBoundary>
-          <Router 
-            future={{
-              v7_startTransition: true,
-              v7_relativeSplatPath: true
-            }}
-          >
-            <div className="flex">
-              <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} currentPage={currentPage} onPageChange={setCurrentPage} />
-              <div className="flex-1 min-h-screen bg-gray-50">
-                <Toaster position="top-right" />
-                <main className="p-6">
-                  <ErrorBoundary>
-                    <Routes>
-                      <Route path="/" element={<Navigate to="/run" replace />} />
-                      <Route path="/run" element={<RunWorkflow />} />
-                      <Route path="/dashboard" element={<InteractiveDashboard />} />
-                      <Route path="/agents" element={<AgentManager selectedAgent={selectedAgent} onAgentSelect={setSelectedAgent} />} />
-                      <Route path="/prompts" element={<PromptManager selectedPrompt={selectedPrompt} onPromptSelect={setSelectedPrompt} />} />
-                      <Route path="/workflows" element={<WorkflowBuilder />} />
-                      <Route path="/models" element={<ModelManagement />} />
-                      <Route path="/model-assignments" element={<ModelAssignments />} />
-                      <Route path="/performance" element={<PerformanceDashboard agents={agents} executionHistory={executionHistory} testResults={testResults} refreshInterval={5000} />} />
-                      <Route path="/editor" element={<EnhancedPromptEditor />} />
-                      <Route path="/observability" element={<ObservabilityDashboard />} />
-                      <Route path="/evals" element={<EvaluationDashboard />} />
-                      <Route path="/tools" element={<ToolManager />} />
-                      <Route path="/settings" element={<Settings />} />
-                      <Route path="/all-runs" element={<AllRuns />} />
-                      <Route path="/knowledge-base" element={<KnowledgeBase />} />
-                      {/* Add more routes as needed */}
-                    </Routes>
-                  </ErrorBoundary>
-                </main>
+        <DataProvider>
+          <AsyncErrorBoundary>
+            <Router 
+              future={{
+                v7_startTransition: true,
+                v7_relativeSplatPath: true
+              }}
+            >
+              <div className="flex">
+                <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} currentPage={currentPage} onPageChange={setCurrentPage} />
+                <div className="flex-1 min-h-screen bg-gray-50">
+                  <Toaster position="top-right" />
+                  <main className="p-6">
+                    <ErrorBoundary>
+                      <Routes>
+                        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                        <Route path="/dashboard" element={<Dashboard />} />
+                        <Route path="/workflows/*" element={<WorkflowsPage />} />
+                        <Route path="/agents" element={<AgentManager />} />
+                        <Route path="/prompts" element={<PromptManager />} />
+                        <Route path="/models/*" element={<ModelsPage />} />
+                        <Route path="/performance" element={<PerformanceDashboard />} />
+                        <Route path="/observability" element={<ObservabilityDashboard />} />
+                        <Route path="/evals" element={<EvaluationDashboard />} />
+                        <Route path="/batch-processing" element={<BatchProcessing />} />
+                        <Route path="/agent-performance" element={<AgentPerformanceDashboard />} />
+                        <Route path="/feedback" element={<FeedbackDashboard />} />
+                        <Route path="/tools" element={<ToolManager />} />
+                        <Route path="/settings" element={<Settings />} />
+                        <Route path="/knowledge-base" element={<KnowledgeBase />} />
+                      </Routes>
+                    </ErrorBoundary>
+                  </main>
+                </div>
               </div>
-            </div>
-          </Router>
-        </AsyncErrorBoundary>
+            </Router>
+          </AsyncErrorBoundary>
+        </DataProvider>
       </QueryClientProvider>
     </ErrorBoundary>
   );
