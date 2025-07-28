@@ -536,12 +536,22 @@ def assess_workflow_output_quality(
     Returns:
         Dictionary with quality scores, issues, and recommendations
     """
+    
+    logger.info(f"assess_workflow_output_quality called with:")
+    logger.info(f"  - profile_summary: {profile_summary[:100] if profile_summary else 'None'}...")
+    logger.info(f"  - thread_analysis: {thread_analysis[:100] if thread_analysis else 'None'}...")
+    logger.info(f"  - reply: {reply[:100] if reply else 'None'}...")
 
     # Assess individual components
     profile_quality = quality_assessor.assess_profile_quality(profile_summary)
+    logger.info(f"Profile quality score: {profile_quality.get('quality_score', 0)}")
+    
     thread_quality = quality_assessor.assess_thread_analysis_quality(
         thread_analysis)
+    logger.info(f"Thread quality score: {thread_quality.get('quality_score', 0)}")
+    
     reply_quality = quality_assessor.assess_reply_quality(reply, context)
+    logger.info(f"Reply quality score: {reply_quality.get('quality_score', 0)}")
 
     # Assess overall quality
     overall_quality = quality_assessor.assess_overall_workflow_quality(
@@ -558,6 +568,11 @@ def assess_workflow_output_quality(
             "reply_generation": reply_quality,
         },
         "overall_assessment": overall_quality,
+        # Add frontend-expected fields at the top level
+        "quality_score": round(overall_quality["overall_quality_score"] * 100, 1),  # Convert to percentage
+        "personalization_score": round(reply_quality["quality_score"] * 100, 1),  # Use reply quality as personalization
+        "relevance_score": round(thread_quality["quality_score"] * 100, 1),  # Use thread quality as relevance
+        "predicted_response_rate": overall_quality["confidence_score"],  # Use confidence as response rate
     }
 
     return assessment

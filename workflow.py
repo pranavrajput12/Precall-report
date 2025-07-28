@@ -7,7 +7,7 @@ from typing import Any, AsyncGenerator, Dict
 
 from agents import llm  # Import the working LLM directly
 from cache import (async_cache_result, cache_result, metrics_collector,
-                   workflow_cache)
+                   workflow_cache, MetricsCollector)
 from faq import get_faq_answer
 from faq_agent import get_intelligent_faq_answer, analyze_questions_batch
 from output_quality import assess_workflow_output_quality
@@ -616,7 +616,7 @@ async def run_reply_generation_streaming(context, channel):
         yield {"type": "reply_generation_complete", "result": final_result}
         return  # Fixed: return without value in async generator
     except Exception as e:
-        increment_counter("reply_generation_error")
+        metrics_collector.increment_counter("reply_generation_error")
         error_msg = f"Error generating reply: {str(e)}"
         yield {"type": "reply_generation_error", "error": error_msg}
         return  # Fixed: return without value in async generator
@@ -1061,7 +1061,7 @@ def run_reply_generation(context, channel):
 
         return final_result
     except Exception as e:
-        increment_counter("reply_generation_error")
+        metrics_collector.increment_counter("reply_generation_error")
         return f"Error generating reply: {str(e)}"
 
 
@@ -1380,7 +1380,7 @@ def run_escalation(reason):
 
         return result.content
     except Exception as e:
-        increment_counter("escalation_error")
+        metrics_collector.increment_counter("escalation_error")
         return f"Error generating escalation: {str(e)}"
 
 
@@ -1583,6 +1583,9 @@ async def run_workflow_parallel_streaming(
         low_confidence = False
 
         # Assess output quality
+        logger.info(f"Assessing quality with profile_summary length: {len(profile_summary) if profile_summary else 0}")
+        logger.info(f"Thread analysis length: {len(thread_analysis) if thread_analysis else 0}")
+        logger.info(f"Reply length: {len(reply) if reply else 0}")
         quality_assessment = assess_workflow_output_quality(
             profile_summary, thread_analysis, reply, context
         )
@@ -1631,7 +1634,7 @@ async def run_workflow_parallel_streaming(
             yield {"type": "workflow_completed", "status": "success", **result}
 
     except Exception as e:
-        increment_counter("workflow_parallel_error")
+        metrics_collector.increment_counter("workflow_parallel_error")
         yield {
             "type": "workflow_error",
             "error": str(e),
@@ -1793,6 +1796,9 @@ async def run_workflow_streaming(
         low_confidence = False
 
         # Assess output quality
+        logger.info(f"Assessing quality with profile_summary length: {len(profile_summary) if profile_summary else 0}")
+        logger.info(f"Thread analysis length: {len(thread_analysis) if thread_analysis else 0}")
+        logger.info(f"Reply length: {len(reply) if reply else 0}")
         quality_assessment = assess_workflow_output_quality(
             profile_summary, thread_analysis, reply, context
         )
@@ -1992,6 +1998,9 @@ def run_workflow(
                 "word_count_info": word_count_info}
 
         # Assess output quality
+        logger.info(f"Assessing quality with profile_summary length: {len(profile_summary) if profile_summary else 0}")
+        logger.info(f"Thread analysis length: {len(thread_analysis) if thread_analysis else 0}")
+        logger.info(f"Reply length: {len(reply) if reply else 0}")
         quality_assessment = assess_workflow_output_quality(
             profile_summary, thread_analysis, reply, context
         )
@@ -2376,6 +2385,6 @@ async def run_reply_generation_template(context, channel):
         return final_result
 
     except Exception as e:
-        increment_counter("reply_generation_template_error")
+        metrics_collector.increment_counter("reply_generation_template_error")
         # Fallback to original method
         return await run_reply_generation_streaming(context, channel)
